@@ -8,10 +8,11 @@ import (
 
 type User struct {
 	gorm.Model
-	Id        uint `gorm:"primaryKey"`
+	Id        uint    `gorm:"primaryKey"`
+	Email     *string `gorm:"uniqueIndex"`
 	Name      string
 	Role      string
-	Email     *string
+	Password  string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
