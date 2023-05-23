@@ -12,7 +12,7 @@ import (
 func main() {
 	cfg := initializers.InitConfig()
 
-	db, err := initializers.InitDb(cfg)
+	err := initializers.InitDb(cfg)
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -21,7 +21,7 @@ func main() {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	})
-	server.Init(app, cfg, db)
+	server.Init(app, cfg)
 
 	port := ":3000"
 	logrus.Fatal(app.Listen(port))

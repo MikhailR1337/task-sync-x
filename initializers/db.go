@@ -12,7 +12,9 @@ type PgDb struct {
 	*gorm.DB
 }
 
-func InitDb(cfg *Config) (*PgDb, error) {
+var DB PgDb
+
+func InitDb(cfg *Config) error {
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s",
 		cfg.PgHost,
 		cfg.PgUser,
@@ -23,11 +25,12 @@ func InitDb(cfg *Config) (*PgDb, error) {
 	// dsn := "host=localhost user=gorm password=gorm dbname=gorm port=9920 sslmode=disable TimeZone=Asia/Shanghai"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	err = migrate.Migrate(db)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &PgDb{db}, nil
+	DB = PgDb{db}
+	return nil
 }

@@ -7,10 +7,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func Init(app *fiber.App, cfg *initializers.Config, db *initializers.PgDb) {
+func Init(app *fiber.App, cfg *initializers.Config) {
 	middlewares.AddCommonMiddleware(app)
-	routes.PublicRoutes(app, db)
+	routes.PublicRoutes(app)
 
 	middlewares.AddJwtMiddleware(app, cfg)
-	routes.AuthorizedRoutes(app, db)
+	routes.AuthorizedRoutes(app)
 }

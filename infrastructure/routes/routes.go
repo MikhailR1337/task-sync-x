@@ -1,11 +1,10 @@
 package routes
 
 import (
-	"github.com/MikhailR1337/task-sync-x/initializers"
 	"github.com/gofiber/fiber/v2"
 )
 
-func PublicRoutes(app *fiber.App, db *initializers.PgDb) {
+func PublicRoutes(app *fiber.App) {
 	app.Get("/", MainPageHandler.Get)
 
 	app.Get("/registration", RegistrationHandler.Get)
@@ -15,15 +14,15 @@ func PublicRoutes(app *fiber.App, db *initializers.PgDb) {
 	app.Post("/login", LoginHandler.Login)
 }
 
-func AuthorizedRoutes(app *fiber.App, db *initializers.PgDb) {
-	app.Get("/profile")
-	app.Patch("profile")
-	app.Delete("profile")
+func AuthorizedRoutes(app *fiber.App) {
+	app.Get("/profile", ProfileHandler.Get)
+	app.Patch("profile", ProfileHandler.Update)
+	app.Delete("profile", ProfileHandler.Delete)
 
-	app.Get("/homeworks")
+	app.Get("/homeworks", HomeworkHandler.GetList)
 
-	app.Get("/homeworks/:id")
-	app.Post("/homeworks/:id")
-	app.Patch("/homeworks/:id")
-	app.Delete("/homeworks/:id")
+	app.Get("/homeworks/:id", HomeworkHandler.Get)
+	app.Post("/homeworks/:id", HomeworkHandler.Create)
+	app.Patch("/homeworks/:id", HomeworkHandler.Update)
+	app.Delete("/homeworks/:id", HomeworkHandler.Delete)
 }
