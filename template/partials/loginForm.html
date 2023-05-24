@@ -2,6 +2,11 @@
     <form method="POST" action="/login">
         <input name="email" type="email" placeholder="Enter your email" autofocus>
         <input name="password" type="password" placeholder="Enter your password">
+        <label for="role">Choose your role:</label> 
+        <select name="role"> 
+            <option value="student">student</option> 
+            <option value="teacher">teacher</option> 
+        </select>
         <button>Submit</button>
     </form>
     <a href="/registration">Create account</a>
