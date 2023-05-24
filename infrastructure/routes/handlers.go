@@ -3,12 +3,15 @@ package routes
 import (
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/MikhailR1337/task-sync-x/domain/models"
 	"github.com/MikhailR1337/task-sync-x/infrastructure/utilities"
 	"github.com/MikhailR1337/task-sync-x/initializers"
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -65,6 +68,12 @@ func (h *registrationHandler) Registrate(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return c.SendStatus(fiber.StatusUnprocessableEntity)
 	}
+	user := models.User{}
+	result := h.storage.Where("email = ?", req.Email).Take(&user)
+	if result.Error == nil {
+		logrus.WithError(result.Error)
+		return c.SendStatus(fiber.StatusConflict)
+	}
 	password, err := utilities.HashPassword(req.Password)
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
@@ -77,9 +86,6 @@ func (h *registrationHandler) Registrate(c *fiber.Ctx) error {
 	}
 
 	if err := h.storage.Create(&newUser).Error; err != nil {
-		if IsDuplicatedKeyError(err) {
-			return c.SendStatus(fiber.StatusConflict)
-		}
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 	id := strconv.FormatUint(uint64(newUser.Id), 10)
@@ -91,12 +97,66 @@ func (h *loginHandler) Get(c *fiber.Ctx) error {
 	return c.SendString("HELLO")
 }
 
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	AccessToken string `json:"access_token"`
+}
+
 func (h *loginHandler) Login(c *fiber.Ctx) error {
-	return c.SendString("HELLO")
+	req := LoginRequest{}
+	if err := c.BodyParser(&req); err != nil {
+		return c.SendStatus(fiber.StatusUnprocessableEntity)
+	}
+	user := models.User{}
+	result := h.storage.Where("email = ?", req.Email).Take(&user)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	if !utilities.CheckPasswordHash(req.Password, user.Password) {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+
+	payload := jwt.MapClaims{
+		"sub": user.Email,
+		"exp": time.Now().Add(time.Hour * 72).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, payload)
+	t, err := token.SignedString([]byte(initializers.Cfg.JwtSecretKey))
+	if err != nil {
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+	return c.JSON(LoginResponse{AccessToken: t})
+}
+
+type ProfileResponse struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+	Role  string `json:"role"`
 }
 
 func (h *profileHandler) Get(c *fiber.Ctx) error {
-	return c.SendString("HELLO")
+	jwtToken, ok := c.Context().Value(initializers.Cfg.ContextKeyUser).(*jwt.Token)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	jwtPayload, ok := jwtToken.Claims.(jwt.MapClaims)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	user := models.User{}
+	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&user)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	return c.JSON(ProfileResponse{
+		Email: *user.Email,
+		Name:  user.Name,
+		Role:  user.Role,
+	})
 }
 
 func (h *profileHandler) Update(c *fiber.Ctx) error {

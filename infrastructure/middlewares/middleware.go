@@ -18,9 +18,9 @@ func AddCommonMiddleware(app *fiber.App) {
 	}))
 }
 
-func AddJwtMiddleware(group fiber.Router, cfg *initializers.Config) {
+func AddJwtMiddleware(group fiber.Router) {
 	group.Use(jwtware.New(jwtware.Config{
-		SigningKey: cfg.JwtSecretKey,
-		ContextKey: cfg.ContextKeyUser,
+		SigningKey: []byte(initializers.Cfg.JwtSecretKey),
+		ContextKey: initializers.Cfg.ContextKeyUser,
 	}))
 }

@@ -23,24 +23,23 @@ type Config struct {
 }
 
 var (
-	config Config
-	once   sync.Once
+	Cfg  Config
+	once sync.Once
 )
 
-func InitConfig() *Config {
+func InitConfig() {
 	once.Do(func() {
 		envType := os.Getenv("ENV")
 		if envType == "" {
 			envType = "dev"
 		}
-		if err := configor.New(&configor.Config{Environment: envType}).Load(&config, "config.json"); err != nil {
+		if err := configor.New(&configor.Config{Environment: envType}).Load(&Cfg, "config.json"); err != nil {
 			logrus.Fatal(err)
 		}
-		configBytes, err := json.MarshalIndent(config, "", "  ")
+		configBytes, err := json.MarshalIndent(Cfg, "", "  ")
 		if err != nil {
 			log.Fatal(err)
 		}
 		fmt.Println("Configuration:", string(configBytes))
 	})
-	return &config
 }

@@ -14,13 +14,13 @@ type PgDb struct {
 
 var DB PgDb
 
-func InitDb(cfg *Config) error {
+func InitDb() error {
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s",
-		cfg.PgHost,
-		cfg.PgUser,
-		cfg.PgPassword,
-		cfg.PgDb,
-		cfg.PgPort,
+		Cfg.PgHost,
+		Cfg.PgUser,
+		Cfg.PgPassword,
+		Cfg.PgDb,
+		Cfg.PgPort,
 	)
 	// dsn := "host=localhost user=gorm password=gorm dbname=gorm port=9920 sslmode=disable TimeZone=Asia/Shanghai"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
