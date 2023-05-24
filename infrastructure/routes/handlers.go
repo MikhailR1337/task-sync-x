@@ -1,8 +1,6 @@
 package routes
 
 import (
-	"errors"
-	"strconv"
 	"time"
 
 	"github.com/MikhailR1337/task-sync-x/domain/models"
@@ -10,7 +8,6 @@ import (
 	"github.com/MikhailR1337/task-sync-x/initializers"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/sirupsen/logrus"
 )
 
@@ -20,10 +17,6 @@ var (
 	LoginHandler        = &loginHandler{&initializers.DB}
 	ProfileHandler      = &profileHandler{&initializers.DB}
 	HomeworkHandler     = &homeworksHandler{&initializers.DB}
-)
-
-const (
-	UniqueViolationErr = "23505"
 )
 
 type (
@@ -45,11 +38,11 @@ type (
 )
 
 func (h *mainPageHandler) Get(c *fiber.Ctx) error {
-	return c.SendString("HELLO")
+	return c.Render("main", fiber.Map{})
 }
 
 func (h *registrationHandler) Get(c *fiber.Ctx) error {
-	return c.SendString("HELLO")
+	return c.Render("registration", fiber.Map{})
 }
 
 type RegistrateRequest struct {
@@ -66,6 +59,7 @@ type RegistrateResponse struct {
 func (h *registrationHandler) Registrate(c *fiber.Ctx) error {
 	req := RegistrateRequest{}
 	if err := c.BodyParser(&req); err != nil {
+		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusUnprocessableEntity)
 	}
 	user := models.User{}
@@ -76,25 +70,24 @@ func (h *registrationHandler) Registrate(c *fiber.Ctx) error {
 	}
 	password, err := utilities.HashPassword(req.Password)
 	if err != nil {
+		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 	newUser := models.User{
 		Name:     req.Name,
 		Email:    &req.Email,
 		Password: password,
-		Role:     req.Password,
+		Role:     req.Role,
 	}
 
 	if err := h.storage.Create(&newUser).Error; err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
-	id := strconv.FormatUint(uint64(newUser.Id), 10)
-
-	return c.Status(fiber.StatusCreated).JSON(RegistrateResponse{Id: id})
+	return c.Status(fiber.StatusCreated).Redirect("/")
 }
 
 func (h *loginHandler) Get(c *fiber.Ctx) error {
-	return c.SendString("HELLO")
+	return c.Render("login", fiber.Map{})
 }
 
 type LoginRequest struct {
@@ -129,7 +122,14 @@ func (h *loginHandler) Login(c *fiber.Ctx) error {
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
-	return c.JSON(LoginResponse{AccessToken: t})
+	cookie := new(fiber.Cookie)
+	cookie.Name = initializers.Cfg.JwtCookieKey
+	cookie.Value = t
+	cookie.Expires = time.Now().Add(72 * time.Hour)
+	cookie.HTTPOnly = true
+
+	c.Cookie(cookie)
+	return c.Redirect("/profile")
 }
 
 type ProfileResponse struct {
@@ -152,10 +152,10 @@ func (h *profileHandler) Get(c *fiber.Ctx) error {
 	if result.Error != nil {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
-	return c.JSON(ProfileResponse{
-		Email: *user.Email,
-		Name:  user.Name,
-		Role:  user.Role,
+	return c.Render("profile", fiber.Map{
+		"email": *user.Email,
+		"name":  user.Name,
+		"role":  user.Role,
 	})
 }
 
@@ -168,11 +168,15 @@ func (h *profileHandler) Delete(c *fiber.Ctx) error {
 }
 
 func (h *homeworksHandler) GetList(c *fiber.Ctx) error {
-	return c.SendString("HELLO")
+	return c.Render("error", fiber.Map{
+		"Error": "404 not found",
+	})
 }
 
 func (h *homeworksHandler) Get(c *fiber.Ctx) error {
-	return c.SendString("HELLO")
+	return c.Render("error", fiber.Map{
+		"Error": "404 not found",
+	})
 }
 
 func (h *homeworksHandler) Create(c *fiber.Ctx) error {
@@ -185,12 +189,4 @@ func (h *homeworksHandler) Update(c *fiber.Ctx) error {
 
 func (h *homeworksHandler) Delete(c *fiber.Ctx) error {
 	return c.SendString("HELLO")
-}
-
-func IsDuplicatedKeyError(err error) bool {
-	var perr *pgconn.PgError
-	if errors.As(err, &perr) {
-		return perr.Code == UniqueViolationErr
-	}
-	return false
 }

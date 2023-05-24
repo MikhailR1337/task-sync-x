@@ -17,7 +17,7 @@ func main() {
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	engine := html.New("./template", ".html")
+	engine := html.New("template", ".html")
 	app := fiber.New(fiber.Config{
 		Views:        engine,
 		ReadTimeout:  10 * time.Second,

@@ -20,6 +20,7 @@ type Config struct {
 	PgTZ           string `env:"PG_TZ"`
 	JwtSecretKey   string `env:"JWT_SECRET_KEY"`
 	ContextKeyUser string `env:"CONTEXT_KEY_USER"`
+	JwtCookieKey   string `env:"JWT_COOKIE_KEY"`
 }
 
 var (
