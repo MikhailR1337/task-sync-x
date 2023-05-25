@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"github.com/MikhailR1337/task-sync-x/infrastructure/server"
+	"github.com/MikhailR1337/task-sync-x/application/server"
 	"github.com/MikhailR1337/task-sync-x/initializers"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html"

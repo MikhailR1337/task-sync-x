@@ -16,7 +16,7 @@ func PublicRoutes(app *fiber.App) {
 
 func AuthorizedRoutes(app *fiber.App) {
 	app.Get("/profile", ProfileHandler.Get)
-	app.Patch("/profile", ProfileHandler.Update)
+	app.Post("/profile", ProfileHandler.Update)
 	app.Delete("/profile", ProfileHandler.Delete)
 
 	app.Get("/homeworks", HomeworkHandler.GetList)

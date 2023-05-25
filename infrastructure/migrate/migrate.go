@@ -1,7 +1,7 @@
 package migrate
 
 import (
-	"github.com/MikhailR1337/task-sync-x/domain/models"
+	"github.com/MikhailR1337/task-sync-x/infrastructure/models"
 	"gorm.io/gorm"
 )
 

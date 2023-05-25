@@ -2,10 +2,11 @@ package routes
 
 import (
 	"errors"
+	"strconv"
 	"time"
 
-	"github.com/MikhailR1337/task-sync-x/domain/models"
-	"github.com/MikhailR1337/task-sync-x/infrastructure/utilities"
+	"github.com/MikhailR1337/task-sync-x/application/utilities"
+	"github.com/MikhailR1337/task-sync-x/infrastructure/models"
 	"github.com/MikhailR1337/task-sync-x/initializers"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
@@ -251,10 +252,16 @@ func (h *profileHandler) GetTeacher(c *fiber.Ctx, jwtPayload jwt.MapClaims) erro
 	if result.Error != nil {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
-	return c.Render("profile", fiber.Map{
-		"email": teacher.Email,
-		"name":  teacher.Name,
-		"role":  Roles.Teacher,
+	students := []models.Student{}
+	result = h.storage.Where("teacher_id", teacher.Id).Find(&students)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	return c.Render("profileTeacher", fiber.Map{
+		"email":    teacher.Email,
+		"name":     teacher.Name,
+		"role":     Roles.Teacher,
+		"students": students,
 	})
 }
 
@@ -264,15 +271,74 @@ func (h *profileHandler) GetStudent(c *fiber.Ctx, jwtPayload jwt.MapClaims) erro
 	if result.Error != nil {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
-	return c.Render("profile", fiber.Map{
-		"email": student.Email,
-		"name":  student.Name,
-		"role":  Roles.Student,
+	if student.TeacherId != 0 {
+		teacher := models.Teacher{}
+		h.storage.Where("id = ?", student.TeacherId).Take(&teacher)
+		return c.Render("profileStudent", fiber.Map{
+			"email":       student.Email,
+			"name":        student.Name,
+			"role":        Roles.Student,
+			"teacherName": teacher.Name,
+		})
+	}
+	teachers := []models.Teacher{}
+	result = h.storage.Find(&teachers)
+	if result.Error != nil {
+		return c.Render("profileStudent", fiber.Map{
+			"email": student.Email,
+			"name":  student.Name,
+			"role":  Roles.Student,
+		})
+	}
+	return c.Render("profileStudent", fiber.Map{
+		"email":    student.Email,
+		"name":     student.Name,
+		"role":     Roles.Student,
+		"teachers": teachers,
 	})
 }
 
+type ProfileUpdateRequest struct {
+	Teacher string `json:"teacher"`
+}
+
 func (h *profileHandler) Update(c *fiber.Ctx) error {
-	return c.SendString("HELLO")
+	jwtToken, ok := c.Context().Value(initializers.Cfg.ContextKeyUser).(*jwt.Token)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	jwtPayload, ok := jwtToken.Claims.(jwt.MapClaims)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	role := jwtPayload["roles"].(string)
+	req := ProfileUpdateRequest{}
+	if err := c.BodyParser(&req); err != nil {
+		return c.SendStatus(fiber.StatusUnprocessableEntity)
+	}
+	if role == Roles.Teacher {
+		return c.Status(fiber.StatusNotFound).Redirect("/")
+	} else if role == Roles.Student {
+		return h.UpdateStudent(c, jwtPayload, &req)
+	} else {
+		return c.Status(fiber.StatusNotFound).Redirect("/")
+	}
+}
+
+func (h *profileHandler) UpdateStudent(c *fiber.Ctx, jwtPayload jwt.MapClaims, req *ProfileUpdateRequest) error {
+	student := models.Student{}
+	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&student)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	teacherId, err := strconv.ParseUint(req.Teacher, 10, 32)
+	if err != nil {
+		logrus.WithError(err)
+		return c.SendStatus(fiber.StatusUnprocessableEntity)
+	}
+	student.TeacherId = uint(teacherId)
+	h.storage.Save(&student)
+	return c.Redirect("/profile")
 }
 
 func (h *profileHandler) Delete(c *fiber.Ctx) error {
@@ -280,8 +346,53 @@ func (h *profileHandler) Delete(c *fiber.Ctx) error {
 }
 
 func (h *homeworksHandler) GetList(c *fiber.Ctx) error {
-	return c.Render("error", fiber.Map{
-		"Error": "404 not found",
+	jwtToken, ok := c.Context().Value(initializers.Cfg.ContextKeyUser).(*jwt.Token)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	jwtPayload, ok := jwtToken.Claims.(jwt.MapClaims)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	role := jwtPayload["roles"].(string)
+	if role == Roles.Teacher {
+		return h.GetTeachersHomeworks(c, jwtPayload)
+	} else if role == Roles.Student {
+		return h.GetStudentHomeworks(c, jwtPayload)
+	} else {
+		return c.Status(fiber.StatusNotFound).Redirect("/")
+	}
+}
+
+func (h *homeworksHandler) GetTeachersHomeworks(c *fiber.Ctx, jwtPayload jwt.MapClaims) error {
+	teacher := models.Teacher{}
+	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&teacher)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	homeworks := []models.Homework{}
+	result = h.storage.Where("teacher_id", teacher.Id).Find(&homeworks)
+	if result.Error != nil {
+		return c.Render("homeworks", fiber.Map{})
+	}
+	return c.Render("homeworks", fiber.Map{
+		"homeworks": homeworks,
+	})
+}
+
+func (h *homeworksHandler) GetStudentHomeworks(c *fiber.Ctx, jwtPayload jwt.MapClaims) error {
+	student := models.Student{}
+	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&student)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	homeworks := []models.Homework{}
+	result = h.storage.Where("student_id", student.Id).Find(&homeworks)
+	if result.Error != nil {
+		return c.Render("homeworks", fiber.Map{})
+	}
+	return c.Render("homeworks", fiber.Map{
+		"homeworks": homeworks,
 	})
 }
 

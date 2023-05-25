@@ -3,7 +3,7 @@ package initializers
 import (
 	"fmt"
 
-	"github.com/MikhailR1337/task-sync-x/domain/migrate"
+	"github.com/MikhailR1337/task-sync-x/infrastructure/migrate"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )

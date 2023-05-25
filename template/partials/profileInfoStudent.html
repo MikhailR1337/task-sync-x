@@ -1,0 +1,31 @@
+<div>
+    <h1>My Profile</h1>
+    <p>Name: {{.name}}</p>
+    <p>Email: {{.email}}</p>
+    <p>Role: {{.role}}</p>
+    <div>
+        <p>
+            {{if .teacherName}}
+                Your teacher: {{.teacherName}}
+            {{- else}}
+                Your teacher: teacher is not choosed
+            {{- end}}
+        </p>
+        {{if .teacherName}}
+        {{- else}}
+            {{if .teachers}}
+            <form method="POST" action="/profile">
+                <label for="teacher">Choose your teacher:</label> 
+                <select name="teacher"> 
+                    {{range .teachers}}
+                        <option value={{.Id}}>{{.Name}}</option> 
+                    {{end}}
+                </select>
+                <button>Submit</button>
+            </form>
+            {{- else}}
+                <p>Teachers do not exist</p>
+            {{- end}}
+        {{- end}}
+    </div>
+</div>

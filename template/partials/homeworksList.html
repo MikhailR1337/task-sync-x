@@ -1,0 +1,15 @@
+<div>
+    {{if .homeworks}}
+    <p>Your homeworks:</p>
+        {{range .homeworks}}
+        <div>
+            <a href="/homeworks/"{{.Id}}>go to</a>
+            <p>{{.Status}}</p>
+            <p>{{.Type}}</p>
+        </div>
+        <hr>
+        {{end}}
+    {{- else}}
+        <p>You still do not have any homeworks</p>
+    {{- end}}
+</div>

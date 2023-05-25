@@ -1,8 +1,8 @@
 package server
 
 import (
-	"github.com/MikhailR1337/task-sync-x/infrastructure/middlewares"
-	"github.com/MikhailR1337/task-sync-x/infrastructure/routes"
+	"github.com/MikhailR1337/task-sync-x/application/middlewares"
+	"github.com/MikhailR1337/task-sync-x/application/routes"
 	"github.com/gofiber/fiber/v2"
 )
 
