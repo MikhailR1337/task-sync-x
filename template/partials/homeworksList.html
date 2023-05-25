@@ -2,10 +2,10 @@
     {{if .homeworks}}
     <p>Your homeworks:</p>
         {{range .homeworks}}
-        <div>
-            <a href="/homeworks/"{{.Id}}>go to</a>
+        <div style="display: flex;align-items: center;gap: 10px;">
             <p>{{.Status}}</p>
             <p>{{.Type}}</p>
+            <a href="/homeworks/{{.Id}}">go to</a>
         </div>
         <hr>
         {{end}}

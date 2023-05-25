@@ -1,0 +1,33 @@
+<div>
+    <p>Name: {{.name}}</p>
+    <p>Description: {{.description}}</p>
+    <p>Current points: {{.currentPoints}}</p>
+    <p>Max points: {{.maxPoints}}</p>
+    <p>Type: {{.type}}</p>
+    <p>Status: {{.status}}</p>
+    <p>Teacher name: {{.teacher}}</p>
+    <p>Student name: {{.student}}</p>
+    {{if .isTeacher}}
+    <div style="display: flex;">
+    <form method="POST" action="/homeworks/{{.id}}" style="display: flex;flex-direction: column;gap: 15px;">
+        <input name="currentPoints" type="text" placeholder="Enter current points" autofocus>
+        <label for="status">Choose the status of homework:</label> 
+        <select name="status"> 
+            <option value="checked">checked</option>
+        </select>
+        <button>Submit</button>
+    </form>
+    </div>
+    {{else}}
+    <div style="display: flex;">
+    <form method="POST" action="/homeworks/{{.id}}" style="display: flex;flex-direction: column;gap: 15px;">
+        <label for="status">Choose the status of homework:</label> 
+        <select name="status"> 
+            <option value="processing">processing</option>
+            <option value="finished">finished</option>
+        </select>
+        <button>Update</button>
+    </form>
+    </div>
+    {{- end}}
+</div>

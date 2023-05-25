@@ -1,0 +1,33 @@
+<div style="display: flex;">
+    {{if .students}}
+        <form method="POST" action="/homeworks" style="display: flex;flex-direction: column;gap: 15px;">
+            <input name="name" type="text" placeholder="Enter name" autofocus>
+            <input name="description" type="text" placeholder="Enter description" autofocus>
+            <input name="currentPoints" type="text" placeholder="Enter current points" autofocus>
+            <input name="maxPoints" type="text" placeholder="Enter maximum points" autofocus>
+            <label for="type">Choose the type of homework:</label> 
+            <select name="type"> 
+                <option value="listening">listening</option>
+                <option value="reading">reading</option>
+                <option value="writing">writing</option>
+                <option value="speaking">speaking</option>
+            </select>
+            <label for="status">Choose the status of homework:</label> 
+            <select name="status"> 
+                <option value="new">new</option>
+                <!-- <option value="processing">processing</option>
+                <option value="finished">finished</option>
+                <option value="checked">checked</option> -->
+            </select>
+            <label for="student">Choose the student:</label> 
+            <select name="student"> 
+                {{range .students}}
+                    <option value={{.Id}}>{{.Name}}</option> 
+                {{end}}
+            </select>
+            <button>Submit</button>
+        </form>
+    {{else}}
+        <p>You cannot create homework until you do not have students</p>
+    {{- end}}
+</div>

@@ -20,9 +20,9 @@ func AuthorizedRoutes(app *fiber.App) {
 	app.Delete("/profile", ProfileHandler.Delete)
 
 	app.Get("/homeworks", HomeworkHandler.GetList)
+	app.Post("/homeworks", HomeworkHandler.Create)
 
 	app.Get("/homeworks/:id", HomeworkHandler.Get)
-	app.Post("/homeworks/:id", HomeworkHandler.Create)
-	app.Patch("/homeworks/:id", HomeworkHandler.Update)
+	app.Post("/homeworks/:id", HomeworkHandler.Update)
 	app.Delete("/homeworks/:id", HomeworkHandler.Delete)
 }

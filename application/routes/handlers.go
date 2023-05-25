@@ -2,6 +2,7 @@ package routes
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -375,8 +376,15 @@ func (h *homeworksHandler) GetTeachersHomeworks(c *fiber.Ctx, jwtPayload jwt.Map
 	if result.Error != nil {
 		return c.Render("homeworks", fiber.Map{})
 	}
+	students := []models.Student{}
+	result = h.storage.Where("teacher_id", teacher.Id).Find(&students)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
 	return c.Render("homeworks", fiber.Map{
 		"homeworks": homeworks,
+		"students":  students,
+		"isTeacher": true,
 	})
 }
 
@@ -396,18 +404,167 @@ func (h *homeworksHandler) GetStudentHomeworks(c *fiber.Ctx, jwtPayload jwt.MapC
 	})
 }
 
-func (h *homeworksHandler) Get(c *fiber.Ctx) error {
-	return c.Render("error", fiber.Map{
-		"Error": "404 not found",
-	})
+type CreateHomeworkRequest struct {
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	CurrentPoints string `json:"currentPoints"`
+	MaxPoints     string `json:"maxPoints"`
+	Type          string `json:"type"`
+	Status        string `json:"status"`
+	Student       string `json:"student"`
 }
 
 func (h *homeworksHandler) Create(c *fiber.Ctx) error {
-	return c.SendString("HELLO")
+	jwtToken, ok := c.Context().Value(initializers.Cfg.ContextKeyUser).(*jwt.Token)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	jwtPayload, ok := jwtToken.Claims.(jwt.MapClaims)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	teacher := models.Teacher{}
+	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&teacher)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	req := CreateHomeworkRequest{}
+	if err := c.BodyParser(&req); err != nil {
+		logrus.WithError(err)
+		return c.SendStatus(fiber.StatusUnprocessableEntity)
+	}
+	currentPoints, err := strconv.ParseUint(req.CurrentPoints, 10, 32)
+	if err != nil {
+		logrus.WithError(err)
+		return c.SendStatus(fiber.StatusUnprocessableEntity)
+	}
+	maxPoints, err := strconv.ParseUint(req.MaxPoints, 10, 32)
+	if err != nil {
+		logrus.WithError(err)
+		return c.SendStatus(fiber.StatusUnprocessableEntity)
+	}
+	studentId, err := strconv.ParseUint(req.Student, 10, 32)
+	if err != nil {
+		logrus.WithError(err)
+		return c.SendStatus(fiber.StatusUnprocessableEntity)
+	}
+	newHomework := models.Homework{
+		Name:          req.Name,
+		Description:   req.Description,
+		CurrentPoints: uint8(currentPoints),
+		MaxPoints:     uint8(maxPoints),
+		Type:          req.Type,
+		Status:        req.Status,
+		TeacherId:     teacher.Id,
+		StudentId:     uint(studentId),
+	}
+	if err := h.storage.Create(&newHomework).Error; err != nil {
+		logrus.WithError(err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+	return c.Redirect("/homeworks")
+}
+
+func (h *homeworksHandler) Get(c *fiber.Ctx) error {
+	jwtToken, ok := c.Context().Value(initializers.Cfg.ContextKeyUser).(*jwt.Token)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	jwtPayload, ok := jwtToken.Claims.(jwt.MapClaims)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	homeworkParam := c.Params("id")
+	homeworkId, err := strconv.ParseUint(homeworkParam, 10, 32)
+	if err != nil {
+		logrus.WithError(err)
+		return c.SendStatus(fiber.StatusUnprocessableEntity)
+	}
+	homework := models.Homework{}
+	result := h.storage.Where("id = ?", uint(homeworkId)).Take(&homework)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	teacher := models.Teacher{}
+	result = h.storage.Where("id = ?", homework.TeacherId).Take(&teacher)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	student := models.Student{}
+	result = h.storage.Where("id = ?", homework.StudentId).Take(&student)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	role := jwtPayload["roles"].(string)
+	return c.Render("homework", fiber.Map{
+		"id":            homework.Id,
+		"name":          homework.Name,
+		"description":   homework.Description,
+		"currentPoints": homework.CurrentPoints,
+		"maxPoints":     homework.MaxPoints,
+		"type":          homework.Type,
+		"status":        homework.Status,
+		"teacher":       teacher.Name,
+		"student":       student.Name,
+		"isTeacher":     role == Roles.Teacher,
+	})
+}
+
+type UpdateHomeworkStudentRequest struct {
+	Status string `json:"status"`
+}
+
+type UpdateHomeworkTeacherRequest struct {
+	Status        string `json:"status"`
+	CurrentPoints string `json:"currentPoints"`
 }
 
 func (h *homeworksHandler) Update(c *fiber.Ctx) error {
-	return c.SendString("HELLO")
+	jwtToken, ok := c.Context().Value(initializers.Cfg.ContextKeyUser).(*jwt.Token)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	jwtPayload, ok := jwtToken.Claims.(jwt.MapClaims)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	homeworkParam := c.Params("id")
+	homeworkId, err := strconv.ParseUint(homeworkParam, 10, 32)
+	if err != nil {
+		logrus.WithError(err)
+		return c.SendStatus(fiber.StatusUnprocessableEntity)
+	}
+	homework := models.Homework{}
+	result := h.storage.Where("id = ?", uint(homeworkId)).Take(&homework)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	role := jwtPayload["roles"].(string)
+	if role == Roles.Teacher {
+		req := UpdateHomeworkTeacherRequest{}
+		if err := c.BodyParser(&req); err != nil {
+			logrus.WithError(err)
+			return c.SendStatus(fiber.StatusUnprocessableEntity)
+		}
+		currentPoints, err := strconv.ParseUint(req.CurrentPoints, 10, 32)
+		if err != nil {
+			logrus.WithError(err)
+			return c.SendStatus(fiber.StatusUnprocessableEntity)
+		}
+		homework.CurrentPoints = uint8(currentPoints)
+		homework.Status = req.Status
+	} else if role == Roles.Student {
+		req := UpdateHomeworkStudentRequest{}
+		if err := c.BodyParser(&req); err != nil {
+			logrus.WithError(err)
+			return c.SendStatus(fiber.StatusUnprocessableEntity)
+		}
+		homework.Status = req.Status
+	} else {
+		return c.Status(fiber.StatusNotFound).Redirect("/")
+	}
+	h.storage.Save(&homework)
+	return c.Redirect(fmt.Sprintf("/homeworks/%s", homeworkParam))
 }
 
 func (h *homeworksHandler) Delete(c *fiber.Ctx) error {

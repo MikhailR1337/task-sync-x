@@ -9,10 +9,7 @@
 
 <body>
     {{template "partials/header" .}}
-    {{template "partials/homeworksList" .}}
-    {{if .isTeacher}}
-        {{template "partials/homeworksCreateForm" .}}
-    {{- end}}
+    {{template "partials/homework" .}}
     {{template "partials/footer" .}}
 </body>
 
