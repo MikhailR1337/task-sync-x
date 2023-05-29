@@ -2,10 +2,11 @@
     {{if .homeworks}}
     <p>Your homeworks:</p>
         {{range .homeworks}}
-        <div style="display: flex;align-items: center;gap: 10px;">
-            <p>{{.Status}}</p>
-            <p>{{.Type}}</p>
-            <a href="/homeworks/{{.Id}}">go to</a>
+        <div style="display: flex;flex-direction: column;">
+            <p>Status: {{.Status}}</p>
+            <p>Type: {{.Type}}</p>
+            <p>Name: {{.Name}}</p>
+            <a href="/homeworks/{{.Id}}">Link</a>
         </div>
         <hr>
         {{end}}

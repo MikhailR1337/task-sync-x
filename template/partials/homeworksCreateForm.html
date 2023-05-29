@@ -15,9 +15,6 @@
             <label for="status">Choose the status of homework:</label> 
             <select name="status"> 
                 <option value="new">new</option>
-                <!-- <option value="processing">processing</option>
-                <option value="finished">finished</option>
-                <option value="checked">checked</option> -->
             </select>
             <label for="student">Choose the student:</label> 
             <select name="student"> 
@@ -28,6 +25,6 @@
             <button>Submit</button>
         </form>
     {{else}}
-        <p>You cannot create homework until you do not have students</p>
+        <p>You cannot create homework until you have students</p>
     {{- end}}
 </div>
