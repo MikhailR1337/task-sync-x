@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -62,10 +63,10 @@ func (h *registrationHandler) Get(c *fiber.Ctx) error {
 }
 
 type RegistrateRequest struct {
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Role     string `json:"role"`
+	Name     string `json:"name" validate:"required,max=100"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,max=30"`
+	Role     string `json:"role" validate:"required,oneof=student teacher"`
 }
 
 type RegistrateResponse struct {
@@ -77,6 +78,10 @@ func (h *registrationHandler) Registrate(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusUnprocessableEntity)
+	}
+	err := initializers.Validator.Struct(req)
+	if err != nil {
+		return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
 	}
 	if req.Role == Roles.Teacher {
 		err := h.CreateTeacher(req)
@@ -153,9 +158,9 @@ func (h *loginHandler) Get(c *fiber.Ctx) error {
 }
 
 type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Role     string `json:"role"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,max=30"`
+	Role     string `json:"role" validate:"required,oneof=student teacher"`
 }
 
 func (h *loginHandler) Login(c *fiber.Ctx) error {
@@ -163,7 +168,10 @@ func (h *loginHandler) Login(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return c.SendStatus(fiber.StatusUnprocessableEntity)
 	}
-
+	err := initializers.Validator.Struct(req)
+	if err != nil {
+		return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+	}
 	if req.Role == Roles.Teacher {
 		err := h.LoginTeacher(req)
 		if err != nil {
@@ -371,15 +379,17 @@ func (h *homeworksHandler) GetTeachersHomeworks(c *fiber.Ctx, jwtPayload jwt.Map
 	if result.Error != nil {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
-	homeworks := []models.Homework{}
-	result = h.storage.Where("teacher_id", teacher.Id).Find(&homeworks)
-	if result.Error != nil {
-		return c.Render("homeworks", fiber.Map{})
-	}
 	students := []models.Student{}
 	result = h.storage.Where("teacher_id", teacher.Id).Find(&students)
 	if result.Error != nil {
 		return c.SendStatus(fiber.StatusNotFound)
+	}
+	homeworks := []models.Homework{}
+	result = h.storage.Where("teacher_id", teacher.Id).Clauses(clause.OrderBy{
+		Expression: clause.Expr{SQL: "(case status when 'new' then 1 when 'processing' then 2 when 'finished' then 3 when 'checked' then 4 end)"},
+	}).Find(&homeworks)
+	if result.Error != nil {
+		return c.Render("homeworks", fiber.Map{})
 	}
 	return c.Render("homeworks", fiber.Map{
 		"homeworks": homeworks,
@@ -395,7 +405,9 @@ func (h *homeworksHandler) GetStudentHomeworks(c *fiber.Ctx, jwtPayload jwt.MapC
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 	homeworks := []models.Homework{}
-	result = h.storage.Where("student_id", student.Id).Find(&homeworks)
+	result = h.storage.Where("student_id", student.Id).Clauses(clause.OrderBy{
+		Expression: clause.Expr{SQL: "(case status when 'new' then 1 when 'processing' then 2 when 'finished' then 3 when 'checked' then 4 end)"},
+	}).Find(&homeworks)
 	if result.Error != nil {
 		return c.Render("homeworks", fiber.Map{})
 	}
@@ -405,13 +417,13 @@ func (h *homeworksHandler) GetStudentHomeworks(c *fiber.Ctx, jwtPayload jwt.MapC
 }
 
 type CreateHomeworkRequest struct {
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	CurrentPoints string `json:"currentPoints"`
-	MaxPoints     string `json:"maxPoints"`
-	Type          string `json:"type"`
-	Status        string `json:"status"`
-	Student       string `json:"student"`
+	Name          string `json:"name" validate:"required,max=100"`
+	Description   string `json:"description" validate:"required,min=0,max=500"`
+	CurrentPoints string `json:"currentPoints" validate:"required,min=0,max=40"`
+	MaxPoints     string `json:"maxPoints" validate:"required,min=0,max=40"`
+	Type          string `json:"type" validate:"required,oneof=listening reading"`
+	Status        string `json:"status" validate:"required,oneof=new processing finished checked"`
+	Student       string `json:"student" validate:"required"`
 }
 
 func (h *homeworksHandler) Create(c *fiber.Ctx) error {
@@ -423,15 +435,19 @@ func (h *homeworksHandler) Create(c *fiber.Ctx) error {
 	if !ok {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
-	teacher := models.Teacher{}
-	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&teacher)
-	if result.Error != nil {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
 	req := CreateHomeworkRequest{}
 	if err := c.BodyParser(&req); err != nil {
 		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusUnprocessableEntity)
+	}
+	err := initializers.Validator.Struct(req)
+	if err != nil {
+		return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+	}
+	teacher := models.Teacher{}
+	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&teacher)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
 	}
 	currentPoints, err := strconv.ParseUint(req.CurrentPoints, 10, 32)
 	if err != nil {

@@ -12,7 +12,7 @@ import (
 
 func main() {
 	initializers.InitConfig()
-
+	initializers.InitValidator()
 	err := initializers.InitDb()
 	if err != nil {
 		logrus.Fatal(err)
