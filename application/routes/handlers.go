@@ -181,7 +181,7 @@ func (h *profileHandler) Get(c *fiber.Ctx) error {
 			"email":    teacher.Email,
 			"name":     teacher.Name,
 			"role":     Roles.Teacher,
-			"students": students,
+			"students": *students,
 		})
 	}
 	student, err := repository.Student.GetByEmail(jwtPayload["sub"].(string))
@@ -214,7 +214,7 @@ func (h *profileHandler) Get(c *fiber.Ctx) error {
 		"email":    student.Email,
 		"name":     student.Name,
 		"role":     Roles.Student,
-		"teachers": teachers,
+		"teachers": *teachers,
 	})
 }
 
@@ -275,8 +275,8 @@ func (h *homeworksHandler) GetList(c *fiber.Ctx) error {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
 		return c.Render("homeworks", fiber.Map{
-			"homeworks": homeworks,
-			"students":  students,
+			"homeworks": *homeworks,
+			"students":  *students,
 			"isTeacher": true,
 		})
 	}

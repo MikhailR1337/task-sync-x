@@ -20,6 +20,7 @@ func main() {
 	engine := html.New("template", ".html")
 	app := fiber.New(fiber.Config{
 		Views:        engine,
+		ViewsLayout:  "index",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	})
