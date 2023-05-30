@@ -21,8 +21,8 @@ func AddCommonMiddleware(app *fiber.App) {
 	}))
 }
 
-func AddJwtMiddleware(group fiber.Router) {
-	group.Use(jwtware.New(jwtware.Config{
+func AddJwtMiddleware(app *fiber.App) {
+	app.Use(jwtware.New(jwtware.Config{
 		TokenLookup: fmt.Sprintf("cookie:%s", initializers.Cfg.JwtCookieKey),
 		SigningKey:  []byte(initializers.Cfg.JwtSecretKey),
 		ContextKey:  initializers.Cfg.ContextKeyUser,
@@ -31,4 +31,12 @@ func AddJwtMiddleware(group fiber.Router) {
 			return c.Redirect("/login")
 		},
 	}))
+}
+
+func Add404Middlware(app *fiber.App) {
+	app.Use(func(c *fiber.Ctx) error {
+		return c.Render("error", fiber.Map{
+			"error": "404 Oops, page not found",
+		})
+	})
 }

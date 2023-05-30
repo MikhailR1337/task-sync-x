@@ -12,4 +12,5 @@ func Init(app *fiber.App) {
 
 	middlewares.AddJwtMiddleware(app)
 	routes.AuthorizedRoutes(app)
+	middlewares.Add404Middlware(app)
 }
