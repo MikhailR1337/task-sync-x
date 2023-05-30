@@ -6,21 +6,22 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/MikhailR1337/task-sync-x/application/forms"
 	"github.com/MikhailR1337/task-sync-x/application/utilities"
 	"github.com/MikhailR1337/task-sync-x/infrastructure/models"
+	"github.com/MikhailR1337/task-sync-x/infrastructure/repository"
 	"github.com/MikhailR1337/task-sync-x/initializers"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/sirupsen/logrus"
-	"gorm.io/gorm/clause"
 )
 
 var (
-	MainPageHandler     = &mainPageHandler{&initializers.DB}
-	RegistrationHandler = &registrationHandler{&initializers.DB}
-	LoginHandler        = &loginHandler{&initializers.DB}
-	ProfileHandler      = &profileHandler{&initializers.DB}
-	HomeworkHandler     = &homeworksHandler{&initializers.DB}
+	MainPageHandler     = &mainPageHandler{}
+	RegistrationHandler = &registrationHandler{}
+	LoginHandler        = &loginHandler{}
+	ProfileHandler      = &profileHandler{}
+	HomeworkHandler     = &homeworksHandler{}
 	Roles               = roles{
 		Teacher: "teacher",
 		Student: "student",
@@ -33,22 +34,12 @@ var (
 )
 
 type (
-	mainPageHandler struct {
-		storage *initializers.PgDb
-	}
-	registrationHandler struct {
-		storage *initializers.PgDb
-	}
-	loginHandler struct {
-		storage *initializers.PgDb
-	}
-	profileHandler struct {
-		storage *initializers.PgDb
-	}
-	homeworksHandler struct {
-		storage *initializers.PgDb
-	}
-	roles = struct {
+	mainPageHandler     struct{}
+	registrationHandler struct{}
+	loginHandler        struct{}
+	profileHandler      struct{}
+	homeworksHandler    struct{}
+	roles               struct {
 		Teacher string
 		Student string
 	}
@@ -62,19 +53,8 @@ func (h *registrationHandler) Get(c *fiber.Ctx) error {
 	return c.Render("registration", fiber.Map{})
 }
 
-type RegistrateRequest struct {
-	Name     string `json:"name" validate:"required,max=100"`
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,max=30"`
-	Role     string `json:"role" validate:"required,oneof=student teacher"`
-}
-
-type RegistrateResponse struct {
-	Id string `json:"id"`
-}
-
 func (h *registrationHandler) Registrate(c *fiber.Ctx) error {
-	req := RegistrateRequest{}
+	req := forms.RegistrateRequest{}
 	if err := c.BodyParser(&req); err != nil {
 		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusUnprocessableEntity)
@@ -83,113 +63,80 @@ func (h *registrationHandler) Registrate(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
 	}
+	password, err := utilities.HashPassword(req.Password)
+	if err != nil {
+		logrus.WithError(err)
+		return err
+	}
 	if req.Role == Roles.Teacher {
-		err := h.CreateTeacher(req)
+		_, err := repository.Teacher.GetByEmail(req.Email)
+		if err == nil {
+			logrus.WithError(err)
+			return errConflict
+		}
+		newTeacher := &models.Teacher{
+			Name:     req.Name,
+			Email:    req.Email,
+			Password: password,
+		}
+		err = repository.Teacher.Create(newTeacher)
 		if err != nil {
-			if errors.Is(err, errConflict) {
-				return c.SendStatus(fiber.StatusConflict)
-			}
+			logrus.WithError(err)
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
 	} else if req.Role == Roles.Student {
-		err := h.CreateStudent(req)
+		_, err := repository.Student.GetByEmail(req.Email)
+		if err == nil {
+			logrus.WithError(err)
+			return errConflict
+		}
+		newStudent := &models.Student{
+			Name:     req.Name,
+			Email:    req.Email,
+			Password: password,
+		}
+		err = repository.Student.Create(newStudent)
 		if err != nil {
-			if errors.Is(err, errConflict) {
-				return c.SendStatus(fiber.StatusConflict)
-			}
+			logrus.WithError(err)
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
-	} else {
-		return c.Status(fiber.StatusNotFound).Redirect("/")
 	}
 	return c.Status(fiber.StatusCreated).Redirect("/login")
-}
-
-func (h *registrationHandler) CreateTeacher(req RegistrateRequest) error {
-	teacher := models.Teacher{}
-	result := h.storage.Where("email = ?", req.Email).Take(&teacher)
-	if result.Error == nil {
-		return errConflict
-	}
-	password, err := utilities.HashPassword(req.Password)
-	if err != nil {
-		logrus.WithError(err)
-		return err
-	}
-	newTeacher := models.Teacher{
-		Name:     req.Name,
-		Email:    req.Email,
-		Password: password,
-	}
-
-	if err := h.storage.Create(&newTeacher).Error; err != nil {
-		logrus.WithError(err)
-		return err
-	}
-	return nil
-}
-
-func (h *registrationHandler) CreateStudent(req RegistrateRequest) error {
-	student := models.Student{}
-	result := h.storage.Where("email = ?", req.Email).Take(&student)
-	if result.Error == nil {
-		return errConflict
-	}
-	password, err := utilities.HashPassword(req.Password)
-	if err != nil {
-		logrus.WithError(err)
-		return err
-	}
-	newStudent := models.Student{
-		Name:     req.Name,
-		Email:    req.Email,
-		Password: password,
-	}
-
-	if err := h.storage.Create(&newStudent).Error; err != nil {
-		logrus.WithError(err)
-		return err
-	}
-	return nil
 }
 
 func (h *loginHandler) Get(c *fiber.Ctx) error {
 	return c.Render("login", fiber.Map{})
 }
 
-type LoginRequest struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,max=30"`
-	Role     string `json:"role" validate:"required,oneof=student teacher"`
-}
-
 func (h *loginHandler) Login(c *fiber.Ctx) error {
-	req := LoginRequest{}
+	req := forms.LoginRequest{}
 	if err := c.BodyParser(&req); err != nil {
 		return c.SendStatus(fiber.StatusUnprocessableEntity)
 	}
+
 	err := initializers.Validator.Struct(req)
 	if err != nil {
+		logrus.WithError(err)
 		return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
 	}
 	if req.Role == Roles.Teacher {
-		err := h.LoginTeacher(req)
+		teacher, err := repository.Teacher.GetByEmail(req.Email)
 		if err != nil {
-			if errors.Is(err, errBadCredentials) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return c.SendStatus(fiber.StatusInternalServerError)
+			logrus.WithError(err)
+			return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+		}
+		if !utilities.CheckPasswordHash(req.Password, teacher.Password) {
+			return c.Status(fiber.StatusUnprocessableEntity).SendString(errBadCredentials.Error())
 		}
 	} else if req.Role == Roles.Student {
-		err := h.LoginStudent(req)
+		student, err := repository.Student.GetByEmail(req.Email)
 		if err != nil {
-			if errors.Is(err, errBadCredentials) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return c.SendStatus(fiber.StatusInternalServerError)
+			logrus.WithError(err)
+			return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
 		}
-	} else {
-		return c.Status(fiber.StatusNotFound).Redirect("/")
+		if !utilities.CheckPasswordHash(req.Password, student.Password) {
+			return c.Status(fiber.StatusUnprocessableEntity).SendString(errBadCredentials.Error())
+		}
 	}
 
 	payload := jwt.MapClaims{
@@ -200,6 +147,7 @@ func (h *loginHandler) Login(c *fiber.Ctx) error {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, payload)
 	t, err := token.SignedString([]byte(initializers.Cfg.JwtSecretKey))
 	if err != nil {
+		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 	cookie := new(fiber.Cookie)
@@ -212,77 +160,41 @@ func (h *loginHandler) Login(c *fiber.Ctx) error {
 	return c.Redirect("/profile")
 }
 
-func (h *loginHandler) LoginTeacher(req LoginRequest) error {
-	teacher := models.Teacher{}
-	result := h.storage.Where("email = ?", req.Email).Take(&teacher)
-	if result.Error != nil {
-		return errBadCredentials
-	}
-	if !utilities.CheckPasswordHash(req.Password, teacher.Password) {
-		return errBadCredentials
-	}
-	return nil
-}
-
-func (h *loginHandler) LoginStudent(req LoginRequest) error {
-	student := models.Student{}
-	result := h.storage.Where("email = ?", req.Email).Take(&student)
-	if result.Error != nil {
-		return errBadCredentials
-	}
-	if !utilities.CheckPasswordHash(req.Password, student.Password) {
-		return errBadCredentials
-	}
-	return nil
-}
-
 func (h *profileHandler) Get(c *fiber.Ctx) error {
-	jwtToken, ok := c.Context().Value(initializers.Cfg.ContextKeyUser).(*jwt.Token)
-	if !ok {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-	jwtPayload, ok := jwtToken.Claims.(jwt.MapClaims)
-	if !ok {
-		return c.SendStatus(fiber.StatusUnauthorized)
+	jwtPayload, err := utilities.GetJwtPayload(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
 	}
 	role := jwtPayload["roles"].(string)
 	if role == Roles.Teacher {
-		return h.GetTeacher(c, jwtPayload)
-	} else if role == Roles.Student {
-		return h.GetStudent(c, jwtPayload)
-	} else {
-		return c.Status(fiber.StatusNotFound).Redirect("/")
+		teacher, err := repository.Teacher.GetByEmail(jwtPayload["sub"].(string))
+		if err != nil {
+			logrus.WithError(err)
+			return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+		}
+		students, err := repository.Student.GetByTeacherId(teacher.Id)
+		if err != nil {
+			logrus.WithError(err)
+			return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+		}
+		return c.Render("profileTeacher", fiber.Map{
+			"email":    teacher.Email,
+			"name":     teacher.Name,
+			"role":     Roles.Teacher,
+			"students": students,
+		})
 	}
-}
-
-func (h *profileHandler) GetTeacher(c *fiber.Ctx, jwtPayload jwt.MapClaims) error {
-	teacher := models.Teacher{}
-	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&teacher)
-	if result.Error != nil {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-	students := []models.Student{}
-	result = h.storage.Where("teacher_id", teacher.Id).Find(&students)
-	if result.Error != nil {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-	return c.Render("profileTeacher", fiber.Map{
-		"email":    teacher.Email,
-		"name":     teacher.Name,
-		"role":     Roles.Teacher,
-		"students": students,
-	})
-}
-
-func (h *profileHandler) GetStudent(c *fiber.Ctx, jwtPayload jwt.MapClaims) error {
-	student := models.Student{}
-	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&student)
-	if result.Error != nil {
-		return c.SendStatus(fiber.StatusNotFound)
+	student, err := repository.Student.GetByEmail(jwtPayload["sub"].(string))
+	if err != nil {
+		logrus.WithError(err)
+		return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
 	}
 	if student.TeacherId != 0 {
-		teacher := models.Teacher{}
-		h.storage.Where("id = ?", student.TeacherId).Take(&teacher)
+		teacher, err := repository.Teacher.GetById(student.TeacherId)
+		if err != nil {
+			logrus.WithError(err)
+			return c.Status(fiber.StatusNotFound).SendString(err.Error())
+		}
 		return c.Render("profileStudent", fiber.Map{
 			"email":       student.Email,
 			"name":        student.Name,
@@ -290,9 +202,8 @@ func (h *profileHandler) GetStudent(c *fiber.Ctx, jwtPayload jwt.MapClaims) erro
 			"teacherName": teacher.Name,
 		})
 	}
-	teachers := []models.Teacher{}
-	result = h.storage.Find(&teachers)
-	if result.Error != nil {
+	teachers, err := repository.Teacher.GetList()
+	if err != nil {
 		return c.Render("profileStudent", fiber.Map{
 			"email": student.Email,
 			"name":  student.Name,
@@ -307,47 +218,33 @@ func (h *profileHandler) GetStudent(c *fiber.Ctx, jwtPayload jwt.MapClaims) erro
 	})
 }
 
-type ProfileUpdateRequest struct {
-	Teacher string `json:"teacher"`
-}
-
 func (h *profileHandler) Update(c *fiber.Ctx) error {
-	jwtToken, ok := c.Context().Value(initializers.Cfg.ContextKeyUser).(*jwt.Token)
-	if !ok {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-	jwtPayload, ok := jwtToken.Claims.(jwt.MapClaims)
-	if !ok {
-		return c.SendStatus(fiber.StatusUnauthorized)
+	jwtPayload, err := utilities.GetJwtPayload(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
 	}
 	role := jwtPayload["roles"].(string)
-	req := ProfileUpdateRequest{}
+	req := forms.StudentUpdateRequest{}
 	if err := c.BodyParser(&req); err != nil {
-		return c.SendStatus(fiber.StatusUnprocessableEntity)
-	}
-	if role == Roles.Teacher {
-		return c.Status(fiber.StatusNotFound).Redirect("/")
-	} else if role == Roles.Student {
-		return h.UpdateStudent(c, jwtPayload, &req)
-	} else {
-		return c.Status(fiber.StatusNotFound).Redirect("/")
-	}
-}
-
-func (h *profileHandler) UpdateStudent(c *fiber.Ctx, jwtPayload jwt.MapClaims, req *ProfileUpdateRequest) error {
-	student := models.Student{}
-	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&student)
-	if result.Error != nil {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-	teacherId, err := strconv.ParseUint(req.Teacher, 10, 32)
-	if err != nil {
 		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusUnprocessableEntity)
 	}
-	student.TeacherId = uint(teacherId)
-	h.storage.Save(&student)
-	return c.Redirect("/profile")
+	if role == Roles.Student {
+		student, err := repository.Student.GetByEmail(jwtPayload["sub"].(string))
+		if err != nil {
+			logrus.WithError(err)
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+		teacherId, err := strconv.ParseUint(req.Teacher, 10, 32)
+		if err != nil {
+			logrus.WithError(err)
+			return c.SendStatus(fiber.StatusUnprocessableEntity)
+		}
+		student.TeacherId = uint(teacherId)
+		repository.Student.Update(student)
+		return c.Redirect("/profile")
+	}
+	return c.Status(fiber.StatusNotFound).Redirect("/")
 }
 
 func (h *profileHandler) Delete(c *fiber.Ctx) error {
@@ -355,98 +252,70 @@ func (h *profileHandler) Delete(c *fiber.Ctx) error {
 }
 
 func (h *homeworksHandler) GetList(c *fiber.Ctx) error {
-	jwtToken, ok := c.Context().Value(initializers.Cfg.ContextKeyUser).(*jwt.Token)
-	if !ok {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-	jwtPayload, ok := jwtToken.Claims.(jwt.MapClaims)
-	if !ok {
-		return c.SendStatus(fiber.StatusUnauthorized)
+	jwtPayload, err := utilities.GetJwtPayload(c)
+	if err != nil {
+		logrus.WithError(err)
+		return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
 	}
 	role := jwtPayload["roles"].(string)
 	if role == Roles.Teacher {
-		return h.GetTeachersHomeworks(c, jwtPayload)
-	} else if role == Roles.Student {
-		return h.GetStudentHomeworks(c, jwtPayload)
-	} else {
-		return c.Status(fiber.StatusNotFound).Redirect("/")
+		teacher, err := repository.Teacher.GetByEmail(jwtPayload["sub"].(string))
+		if err != nil {
+			logrus.WithError(err)
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+		students, err := repository.Student.GetByTeacherId(teacher.Id)
+		if err != nil {
+			logrus.WithError(err)
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+		homeworks, err := repository.Homework.GetByTeacherId(teacher.Id)
+		if err != nil {
+			logrus.WithError(err)
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+		return c.Render("homeworks", fiber.Map{
+			"homeworks": homeworks,
+			"students":  students,
+			"isTeacher": true,
+		})
 	}
-}
-
-func (h *homeworksHandler) GetTeachersHomeworks(c *fiber.Ctx, jwtPayload jwt.MapClaims) error {
-	teacher := models.Teacher{}
-	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&teacher)
-	if result.Error != nil {
+	student, err := repository.Student.GetByEmail(jwtPayload["sub"].(string))
+	if err != nil {
+		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusNotFound)
 	}
-	students := []models.Student{}
-	result = h.storage.Where("teacher_id", teacher.Id).Find(&students)
-	if result.Error != nil {
+	homeworks, err := repository.Homework.GetByStudentId(student.Id)
+	if err != nil {
+		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusNotFound)
 	}
-	homeworks := []models.Homework{}
-	result = h.storage.Where("teacher_id", teacher.Id).Clauses(clause.OrderBy{
-		Expression: clause.Expr{SQL: "(case status when 'new' then 1 when 'processing' then 2 when 'finished' then 3 when 'checked' then 4 end)"},
-	}).Find(&homeworks)
-	if result.Error != nil {
-		return c.Render("homeworks", fiber.Map{})
-	}
-	return c.Render("homeworks", fiber.Map{
-		"homeworks": homeworks,
-		"students":  students,
-		"isTeacher": true,
-	})
-}
-
-func (h *homeworksHandler) GetStudentHomeworks(c *fiber.Ctx, jwtPayload jwt.MapClaims) error {
-	student := models.Student{}
-	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&student)
-	if result.Error != nil {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-	homeworks := []models.Homework{}
-	result = h.storage.Where("student_id", student.Id).Clauses(clause.OrderBy{
-		Expression: clause.Expr{SQL: "(case status when 'new' then 1 when 'processing' then 2 when 'finished' then 3 when 'checked' then 4 end)"},
-	}).Find(&homeworks)
-	if result.Error != nil {
+	if err != nil {
+		logrus.WithError(err)
 		return c.Render("homeworks", fiber.Map{})
 	}
 	return c.Render("homeworks", fiber.Map{
 		"homeworks": homeworks,
 	})
-}
-
-type CreateHomeworkRequest struct {
-	Name          string `json:"name" validate:"required,max=100"`
-	Description   string `json:"description" validate:"required,min=0,max=500"`
-	CurrentPoints string `json:"currentPoints" validate:"required,min=0,max=40"`
-	MaxPoints     string `json:"maxPoints" validate:"required,min=0,max=40"`
-	Type          string `json:"type" validate:"required,oneof=listening reading"`
-	Status        string `json:"status" validate:"required,oneof=new processing finished checked"`
-	Student       string `json:"student" validate:"required"`
 }
 
 func (h *homeworksHandler) Create(c *fiber.Ctx) error {
-	jwtToken, ok := c.Context().Value(initializers.Cfg.ContextKeyUser).(*jwt.Token)
-	if !ok {
-		return c.SendStatus(fiber.StatusUnauthorized)
+	jwtPayload, err := utilities.GetJwtPayload(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
 	}
-	jwtPayload, ok := jwtToken.Claims.(jwt.MapClaims)
-	if !ok {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-	req := CreateHomeworkRequest{}
+	req := forms.CreateHomeworkRequest{}
 	if err := c.BodyParser(&req); err != nil {
 		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusUnprocessableEntity)
 	}
-	err := initializers.Validator.Struct(req)
+	err = initializers.Validator.Struct(req)
 	if err != nil {
 		return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
 	}
-	teacher := models.Teacher{}
-	result := h.storage.Where("email = ?", jwtPayload["sub"].(string)).Take(&teacher)
-	if result.Error != nil {
+	teacher, err := repository.Teacher.GetByEmail(jwtPayload["sub"].(string))
+	if err != nil {
+		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 	currentPoints, err := strconv.ParseUint(req.CurrentPoints, 10, 32)
@@ -464,6 +333,7 @@ func (h *homeworksHandler) Create(c *fiber.Ctx) error {
 		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusUnprocessableEntity)
 	}
+
 	newHomework := models.Homework{
 		Name:          req.Name,
 		Description:   req.Description,
@@ -474,7 +344,8 @@ func (h *homeworksHandler) Create(c *fiber.Ctx) error {
 		TeacherId:     teacher.Id,
 		StudentId:     uint(studentId),
 	}
-	if err := h.storage.Create(&newHomework).Error; err != nil {
+	err = repository.Homework.Create(&newHomework)
+	if err != nil {
 		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
@@ -482,13 +353,9 @@ func (h *homeworksHandler) Create(c *fiber.Ctx) error {
 }
 
 func (h *homeworksHandler) Get(c *fiber.Ctx) error {
-	jwtToken, ok := c.Context().Value(initializers.Cfg.ContextKeyUser).(*jwt.Token)
-	if !ok {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-	jwtPayload, ok := jwtToken.Claims.(jwt.MapClaims)
-	if !ok {
-		return c.SendStatus(fiber.StatusUnauthorized)
+	jwtPayload, err := utilities.GetJwtPayload(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
 	}
 	homeworkParam := c.Params("id")
 	homeworkId, err := strconv.ParseUint(homeworkParam, 10, 32)
@@ -496,19 +363,19 @@ func (h *homeworksHandler) Get(c *fiber.Ctx) error {
 		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusUnprocessableEntity)
 	}
-	homework := models.Homework{}
-	result := h.storage.Where("id = ?", uint(homeworkId)).Take(&homework)
-	if result.Error != nil {
+	homework, err := repository.Homework.GetById(uint(homeworkId))
+	if err != nil {
+		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusNotFound)
 	}
-	teacher := models.Teacher{}
-	result = h.storage.Where("id = ?", homework.TeacherId).Take(&teacher)
-	if result.Error != nil {
+	teacher, err := repository.Teacher.GetById(homework.TeacherId)
+	if err != nil {
+		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusNotFound)
 	}
-	student := models.Student{}
-	result = h.storage.Where("id = ?", homework.StudentId).Take(&student)
-	if result.Error != nil {
+	student, err := repository.Student.GetById(homework.StudentId)
+	if err != nil {
+		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 	role := jwtPayload["roles"].(string)
@@ -526,23 +393,10 @@ func (h *homeworksHandler) Get(c *fiber.Ctx) error {
 	})
 }
 
-type UpdateHomeworkStudentRequest struct {
-	Status string `json:"status"`
-}
-
-type UpdateHomeworkTeacherRequest struct {
-	Status        string `json:"status"`
-	CurrentPoints string `json:"currentPoints"`
-}
-
 func (h *homeworksHandler) Update(c *fiber.Ctx) error {
-	jwtToken, ok := c.Context().Value(initializers.Cfg.ContextKeyUser).(*jwt.Token)
-	if !ok {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-	jwtPayload, ok := jwtToken.Claims.(jwt.MapClaims)
-	if !ok {
-		return c.SendStatus(fiber.StatusUnauthorized)
+	jwtPayload, err := utilities.GetJwtPayload(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
 	}
 	homeworkParam := c.Params("id")
 	homeworkId, err := strconv.ParseUint(homeworkParam, 10, 32)
@@ -550,14 +404,14 @@ func (h *homeworksHandler) Update(c *fiber.Ctx) error {
 		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusUnprocessableEntity)
 	}
-	homework := models.Homework{}
-	result := h.storage.Where("id = ?", uint(homeworkId)).Take(&homework)
-	if result.Error != nil {
+	homework, err := repository.Homework.GetById(uint(homeworkId))
+	if err != nil {
+		logrus.WithError(err)
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 	role := jwtPayload["roles"].(string)
 	if role == Roles.Teacher {
-		req := UpdateHomeworkTeacherRequest{}
+		req := forms.UpdateHomeworkTeacherRequest{}
 		if err := c.BodyParser(&req); err != nil {
 			logrus.WithError(err)
 			return c.SendStatus(fiber.StatusUnprocessableEntity)
@@ -570,7 +424,7 @@ func (h *homeworksHandler) Update(c *fiber.Ctx) error {
 		homework.CurrentPoints = uint8(currentPoints)
 		homework.Status = req.Status
 	} else if role == Roles.Student {
-		req := UpdateHomeworkStudentRequest{}
+		req := forms.UpdateHomeworkStudentRequest{}
 		if err := c.BodyParser(&req); err != nil {
 			logrus.WithError(err)
 			return c.SendStatus(fiber.StatusUnprocessableEntity)
@@ -579,7 +433,11 @@ func (h *homeworksHandler) Update(c *fiber.Ctx) error {
 	} else {
 		return c.Status(fiber.StatusNotFound).Redirect("/")
 	}
-	h.storage.Save(&homework)
+	err = repository.Homework.Update(homework)
+	if err != nil {
+		logrus.WithError(err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
 	return c.Redirect(fmt.Sprintf("/homeworks/%s", homeworkParam))
 }
 
