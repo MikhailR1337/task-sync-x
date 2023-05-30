@@ -29,8 +29,12 @@ var (
 )
 
 var (
-	errConflict       = errors.New("Conflict")
+	errNotFound       = errors.New("404 Oops, page not found")
+	errSomethingWrong = errors.New("something wrong. try again")
+	errConflict       = errors.New("oops... we already have this email")
 	errBadCredentials = errors.New("email or password is incorrect")
+	errValidation     = errors.New("something wrong with your data. change something and try again")
+	errPoints         = errors.New("points should be a number")
 )
 
 type (
@@ -46,33 +50,42 @@ type (
 )
 
 func (h *mainPageHandler) Get(c *fiber.Ctx) error {
-	return c.Render("main", fiber.Map{})
+	return c.Render("main", nil)
 }
 
 func (h *registrationHandler) Get(c *fiber.Ctx) error {
-	return c.Render("registration", fiber.Map{})
+	return c.Render("registration", nil)
 }
 
 func (h *registrationHandler) Registrate(c *fiber.Ctx) error {
 	req := forms.RegistrateRequest{}
 	if err := c.BodyParser(&req); err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusUnprocessableEntity)
+		return c.Render("registration", fiber.Map{
+			"error": errSomethingWrong,
+		})
 	}
 	err := initializers.Validator.Struct(req)
 	if err != nil {
-		return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+		logrus.WithError(err)
+		return c.Render("registration", fiber.Map{
+			"error": errValidation,
+		})
 	}
 	password, err := utilities.HashPassword(req.Password)
 	if err != nil {
 		logrus.WithError(err)
-		return err
+		return c.Render("registration", fiber.Map{
+			"error": errSomethingWrong,
+		})
 	}
 	if req.Role == Roles.Teacher {
 		_, err := repository.Teacher.GetByEmail(req.Email)
 		if err == nil {
 			logrus.WithError(err)
-			return errConflict
+			return c.Render("registration", fiber.Map{
+				"error": errConflict,
+			})
 		}
 		newTeacher := &models.Teacher{
 			Name:     req.Name,
@@ -82,13 +95,17 @@ func (h *registrationHandler) Registrate(c *fiber.Ctx) error {
 		err = repository.Teacher.Create(newTeacher)
 		if err != nil {
 			logrus.WithError(err)
-			return c.SendStatus(fiber.StatusInternalServerError)
+			return c.Render("registration", fiber.Map{
+				"error": errSomethingWrong,
+			})
 		}
 	} else if req.Role == Roles.Student {
 		_, err := repository.Student.GetByEmail(req.Email)
 		if err == nil {
 			logrus.WithError(err)
-			return errConflict
+			return c.Render("registration", fiber.Map{
+				"error": errConflict,
+			})
 		}
 		newStudent := &models.Student{
 			Name:     req.Name,
@@ -98,7 +115,9 @@ func (h *registrationHandler) Registrate(c *fiber.Ctx) error {
 		err = repository.Student.Create(newStudent)
 		if err != nil {
 			logrus.WithError(err)
-			return c.SendStatus(fiber.StatusInternalServerError)
+			return c.Render("registration", fiber.Map{
+				"error": errSomethingWrong,
+			})
 		}
 	}
 	return c.Status(fiber.StatusCreated).Redirect("/login")
@@ -111,31 +130,45 @@ func (h *loginHandler) Get(c *fiber.Ctx) error {
 func (h *loginHandler) Login(c *fiber.Ctx) error {
 	req := forms.LoginRequest{}
 	if err := c.BodyParser(&req); err != nil {
-		return c.SendStatus(fiber.StatusUnprocessableEntity)
+		return c.Render("login", fiber.Map{
+			"error": errSomethingWrong,
+		})
 	}
 
 	err := initializers.Validator.Struct(req)
 	if err != nil {
 		logrus.WithError(err)
-		return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+		return c.Render("login", fiber.Map{
+			"error": errValidation,
+		})
 	}
 	if req.Role == Roles.Teacher {
 		teacher, err := repository.Teacher.GetByEmail(req.Email)
 		if err != nil {
 			logrus.WithError(err)
-			return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+			return c.Render("login", fiber.Map{
+				"error": errBadCredentials,
+			})
 		}
 		if !utilities.CheckPasswordHash(req.Password, teacher.Password) {
-			return c.Status(fiber.StatusUnprocessableEntity).SendString(errBadCredentials.Error())
+			logrus.WithError(err)
+			return c.Render("login", fiber.Map{
+				"error": errBadCredentials,
+			})
 		}
 	} else if req.Role == Roles.Student {
 		student, err := repository.Student.GetByEmail(req.Email)
 		if err != nil {
 			logrus.WithError(err)
-			return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+			return c.Render("login", fiber.Map{
+				"error": errBadCredentials,
+			})
 		}
 		if !utilities.CheckPasswordHash(req.Password, student.Password) {
-			return c.Status(fiber.StatusUnprocessableEntity).SendString(errBadCredentials.Error())
+			logrus.WithError(err)
+			return c.Render("login", fiber.Map{
+				"error": errBadCredentials,
+			})
 		}
 	}
 
@@ -148,7 +181,9 @@ func (h *loginHandler) Login(c *fiber.Ctx) error {
 	t, err := token.SignedString([]byte(initializers.Cfg.JwtSecretKey))
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return c.Render("login", fiber.Map{
+			"error": errSomethingWrong,
+		})
 	}
 	cookie := new(fiber.Cookie)
 	cookie.Name = initializers.Cfg.JwtCookieKey
@@ -163,19 +198,22 @@ func (h *loginHandler) Login(c *fiber.Ctx) error {
 func (h *profileHandler) Get(c *fiber.Ctx) error {
 	jwtPayload, err := utilities.GetJwtPayload(c)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
+		logrus.WithError(err)
+		return c.Redirect("/login")
 	}
 	role := jwtPayload["roles"].(string)
 	if role == Roles.Teacher {
 		teacher, err := repository.Teacher.GetByEmail(jwtPayload["sub"].(string))
 		if err != nil {
 			logrus.WithError(err)
-			return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+			return c.Redirect("/login")
 		}
 		students, err := repository.Student.GetByTeacherId(teacher.Id)
 		if err != nil {
 			logrus.WithError(err)
-			return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+			return c.Render("/profileTeacher", fiber.Map{
+				"error": errSomethingWrong,
+			})
 		}
 		return c.Render("profileTeacher", fiber.Map{
 			"email":    teacher.Email,
@@ -187,13 +225,15 @@ func (h *profileHandler) Get(c *fiber.Ctx) error {
 	student, err := repository.Student.GetByEmail(jwtPayload["sub"].(string))
 	if err != nil {
 		logrus.WithError(err)
-		return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+		return c.Redirect("/login")
 	}
 	if student.TeacherId != 0 {
 		teacher, err := repository.Teacher.GetById(student.TeacherId)
 		if err != nil {
 			logrus.WithError(err)
-			return c.Status(fiber.StatusNotFound).SendString(err.Error())
+			return c.Render("/profileStudent", fiber.Map{
+				"error": errSomethingWrong,
+			})
 		}
 		return c.Render("profileStudent", fiber.Map{
 			"email":       student.Email,
@@ -221,24 +261,35 @@ func (h *profileHandler) Get(c *fiber.Ctx) error {
 func (h *profileHandler) Update(c *fiber.Ctx) error {
 	jwtPayload, err := utilities.GetJwtPayload(c)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
+		logrus.WithError(err)
+		return c.Redirect("/login")
 	}
 	role := jwtPayload["roles"].(string)
 	req := forms.StudentUpdateRequest{}
 	if err := c.BodyParser(&req); err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusUnprocessableEntity)
+		if role == Roles.Student {
+			return c.Render("profileStudent", fiber.Map{
+				"error": errSomethingWrong,
+			})
+		} else {
+			return c.Render("profileTeacher", fiber.Map{
+				"error": errSomethingWrong,
+			})
+		}
 	}
 	if role == Roles.Student {
 		student, err := repository.Student.GetByEmail(jwtPayload["sub"].(string))
 		if err != nil {
 			logrus.WithError(err)
-			return c.SendStatus(fiber.StatusNotFound)
+			return c.Redirect("/login")
 		}
 		teacherId, err := strconv.ParseUint(req.Teacher, 10, 32)
 		if err != nil {
 			logrus.WithError(err)
-			return c.SendStatus(fiber.StatusUnprocessableEntity)
+			return c.Render("profileStudent", fiber.Map{
+				"error": errSomethingWrong,
+			})
 		}
 		student.TeacherId = uint(teacherId)
 		repository.Student.Update(student)
@@ -255,24 +306,25 @@ func (h *homeworksHandler) GetList(c *fiber.Ctx) error {
 	jwtPayload, err := utilities.GetJwtPayload(c)
 	if err != nil {
 		logrus.WithError(err)
-		return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
+		return c.Redirect("/login")
 	}
 	role := jwtPayload["roles"].(string)
 	if role == Roles.Teacher {
 		teacher, err := repository.Teacher.GetByEmail(jwtPayload["sub"].(string))
 		if err != nil {
 			logrus.WithError(err)
-			return c.SendStatus(fiber.StatusNotFound)
+			return c.Redirect("/login")
 		}
 		students, err := repository.Student.GetByTeacherId(teacher.Id)
 		if err != nil {
 			logrus.WithError(err)
-			return c.SendStatus(fiber.StatusNotFound)
+			return c.Render("homeworks", fiber.Map{
+				"error": errSomethingWrong,
+			})
 		}
 		homeworks, err := repository.Homework.GetByTeacherId(teacher.Id)
 		if err != nil {
-			logrus.WithError(err)
-			return c.SendStatus(fiber.StatusNotFound)
+			return c.Render("homeworks", fiber.Map{})
 		}
 		return c.Render("homeworks", fiber.Map{
 			"homeworks": *homeworks,
@@ -283,55 +335,62 @@ func (h *homeworksHandler) GetList(c *fiber.Ctx) error {
 	student, err := repository.Student.GetByEmail(jwtPayload["sub"].(string))
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusNotFound)
+		return c.Redirect("/login")
 	}
 	homeworks, err := repository.Homework.GetByStudentId(student.Id)
 	if err != nil {
-		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-	if err != nil {
-		logrus.WithError(err)
 		return c.Render("homeworks", fiber.Map{})
 	}
 	return c.Render("homeworks", fiber.Map{
-		"homeworks": homeworks,
+		"homeworks": *homeworks,
 	})
 }
 
 func (h *homeworksHandler) Create(c *fiber.Ctx) error {
 	jwtPayload, err := utilities.GetJwtPayload(c)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
+		logrus.WithError(err)
+		return c.Redirect("/login")
 	}
 	req := forms.CreateHomeworkRequest{}
 	if err := c.BodyParser(&req); err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusUnprocessableEntity)
+		return c.Render("homeworks", fiber.Map{
+			"error": errSomethingWrong,
+		})
 	}
 	err = initializers.Validator.Struct(req)
 	if err != nil {
-		return c.Status(fiber.StatusUnprocessableEntity).SendString(err.Error())
+		logrus.WithError(err)
+		return c.Render("homeworks", fiber.Map{
+			"error": errValidation,
+		})
 	}
 	teacher, err := repository.Teacher.GetByEmail(jwtPayload["sub"].(string))
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusNotFound)
+		return c.Redirect("/login")
 	}
 	currentPoints, err := strconv.ParseUint(req.CurrentPoints, 10, 32)
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusUnprocessableEntity)
+		return c.Render("homeworks", fiber.Map{
+			"error": errPoints,
+		})
 	}
 	maxPoints, err := strconv.ParseUint(req.MaxPoints, 10, 32)
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusUnprocessableEntity)
+		return c.Render("homeworks", fiber.Map{
+			"error": errPoints,
+		})
 	}
 	studentId, err := strconv.ParseUint(req.Student, 10, 32)
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusUnprocessableEntity)
+		return c.Render("homeworks", fiber.Map{
+			"error": errSomethingWrong,
+		})
 	}
 
 	newHomework := models.Homework{
@@ -344,10 +403,13 @@ func (h *homeworksHandler) Create(c *fiber.Ctx) error {
 		TeacherId:     teacher.Id,
 		StudentId:     uint(studentId),
 	}
+
 	err = repository.Homework.Create(&newHomework)
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return c.Render("homeworks", fiber.Map{
+			"error": errSomethingWrong,
+		})
 	}
 	return c.Redirect("/homeworks")
 }
@@ -355,28 +417,37 @@ func (h *homeworksHandler) Create(c *fiber.Ctx) error {
 func (h *homeworksHandler) Get(c *fiber.Ctx) error {
 	jwtPayload, err := utilities.GetJwtPayload(c)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
+		logrus.WithError(err)
+		return c.Redirect("/login")
 	}
 	homeworkParam := c.Params("id")
 	homeworkId, err := strconv.ParseUint(homeworkParam, 10, 32)
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusUnprocessableEntity)
+		return c.Render("homework", fiber.Map{
+			"error": errNotFound,
+		})
 	}
 	homework, err := repository.Homework.GetById(uint(homeworkId))
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusNotFound)
+		return c.Render("homework", fiber.Map{
+			"error": errNotFound,
+		})
 	}
 	teacher, err := repository.Teacher.GetById(homework.TeacherId)
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusNotFound)
+		return c.Render("homework", fiber.Map{
+			"error": errSomethingWrong,
+		})
 	}
 	student, err := repository.Student.GetById(homework.StudentId)
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusNotFound)
+		return c.Render("homework", fiber.Map{
+			"error": errSomethingWrong,
+		})
 	}
 	role := jwtPayload["roles"].(string)
 	return c.Render("homework", fiber.Map{
@@ -396,30 +467,39 @@ func (h *homeworksHandler) Get(c *fiber.Ctx) error {
 func (h *homeworksHandler) Update(c *fiber.Ctx) error {
 	jwtPayload, err := utilities.GetJwtPayload(c)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).SendString(err.Error())
+		logrus.WithError(err)
+		return c.Redirect("/login")
 	}
 	homeworkParam := c.Params("id")
 	homeworkId, err := strconv.ParseUint(homeworkParam, 10, 32)
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusUnprocessableEntity)
+		return c.Render("homework", fiber.Map{
+			"error": errNotFound,
+		})
 	}
 	homework, err := repository.Homework.GetById(uint(homeworkId))
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusNotFound)
+		return c.Render("homework", fiber.Map{
+			"error": errNotFound,
+		})
 	}
 	role := jwtPayload["roles"].(string)
 	if role == Roles.Teacher {
 		req := forms.UpdateHomeworkTeacherRequest{}
 		if err := c.BodyParser(&req); err != nil {
 			logrus.WithError(err)
-			return c.SendStatus(fiber.StatusUnprocessableEntity)
+			return c.Render("homework", fiber.Map{
+				"error": errSomethingWrong,
+			})
 		}
 		currentPoints, err := strconv.ParseUint(req.CurrentPoints, 10, 32)
 		if err != nil {
 			logrus.WithError(err)
-			return c.SendStatus(fiber.StatusUnprocessableEntity)
+			return c.Render("homework", fiber.Map{
+				"error": errPoints,
+			})
 		}
 		homework.CurrentPoints = uint8(currentPoints)
 		homework.Status = req.Status
@@ -427,16 +507,18 @@ func (h *homeworksHandler) Update(c *fiber.Ctx) error {
 		req := forms.UpdateHomeworkStudentRequest{}
 		if err := c.BodyParser(&req); err != nil {
 			logrus.WithError(err)
-			return c.SendStatus(fiber.StatusUnprocessableEntity)
+			return c.Render("homework", fiber.Map{
+				"error": errSomethingWrong,
+			})
 		}
 		homework.Status = req.Status
-	} else {
-		return c.Status(fiber.StatusNotFound).Redirect("/")
 	}
 	err = repository.Homework.Update(homework)
 	if err != nil {
 		logrus.WithError(err)
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return c.Render("homework", fiber.Map{
+			"error": errSomethingWrong,
+		})
 	}
 	return c.Redirect(fmt.Sprintf("/homeworks/%s", homeworkParam))
 }
