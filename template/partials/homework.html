@@ -7,27 +7,42 @@
     <p>Status: {{.status}}</p>
     <p>Teacher name: {{.teacher}}</p>
     <p>Student name: {{.student}}</p>
-    {{if .isTeacher}}
-    <div style="display: flex;">
-    <form method="POST" action="/homeworks/{{.id}}" style="display: flex;flex-direction: column;gap: 15px;">
-        <input name="currentPoints" type="text" placeholder="Enter current points" autofocus>
-        <label for="status">Choose the status of homework:</label> 
-        <select name="status"> 
-            <option value="checked">checked</option>
-        </select>
-        <button>Update</button>
-    </form>
-    </div>
+    {{if .isChecked}}
+        <p>This homework has been checked. Check the result and enjoy your studying</p>
     {{else}}
-    <div style="display: flex;">
-    <form method="POST" action="/homeworks/{{.id}}" style="display: flex;flex-direction: column;gap: 15px;">
-        <label for="status">Choose the status of homework:</label> 
-        <select name="status"> 
-            <option value="processing">processing</option>
-            <option value="finished">finished</option>
-        </select>
-        <button>Update</button>
-    </form>
-    </div>
+    {{if .isTeacher}}
+        {{if .isTeacherCanCheck}}
+            <div style="display: flex;">
+                <form method="POST" action="/homeworks/{{.id}}" style="display: flex;flex-direction: column;gap: 15px;">
+                    <input name="currentPoints" type="text" placeholder="Enter current points" autofocus>
+                    <label for="status">Choose the status of homework:</label> 
+                    <select name="status"> 
+                        <option value="checked">checked</option>
+                    </select>
+                    <button>Update</button>
+                </form>
+            </div>
+        {{else}}
+            <p>you cannot change status until student is finished</p>
+        {{- end}}
+    {{else}}
+        {{if .isTeacherCanCheck}}
+            <p>you cannot change the status because already finished</p>
+        {{else}}
+        <div style="display: flex;">
+            <form method="POST" action="/homeworks/{{.id}}" style="display: flex;flex-direction: column;gap: 15px;">
+                <label for="status">Choose the status of homework:</label> 
+                <select name="status">
+                    {{if .isStudentCanStart}}
+                        <option value="processing">processing</option>
+                    {{else if .isStudentCanFinish}}
+                        <option value="finished">finished</option>
+                    {{- end}}
+                </select>
+                <button>Update</button>
+            </form>
+        </div>
+        {{- end}}
+    {{- end}}
     {{- end}}
 </div>

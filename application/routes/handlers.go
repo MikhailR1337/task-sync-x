@@ -211,7 +211,7 @@ func (h *profileHandler) Get(c *fiber.Ctx) error {
 		students, err := repository.Student.GetByTeacherId(teacher.Id)
 		if err != nil {
 			logrus.WithError(err)
-			return c.Render("/profileTeacher", fiber.Map{
+			return c.Render("profileTeacher", fiber.Map{
 				"error": errSomethingWrong,
 			})
 		}
@@ -451,16 +451,20 @@ func (h *homeworksHandler) Get(c *fiber.Ctx) error {
 	}
 	role := jwtPayload["roles"].(string)
 	return c.Render("homework", fiber.Map{
-		"id":            homework.Id,
-		"name":          homework.Name,
-		"description":   homework.Description,
-		"currentPoints": homework.CurrentPoints,
-		"maxPoints":     homework.MaxPoints,
-		"type":          homework.Type,
-		"status":        homework.Status,
-		"teacher":       teacher.Name,
-		"student":       student.Name,
-		"isTeacher":     role == Roles.Teacher,
+		"id":                 homework.Id,
+		"name":               homework.Name,
+		"description":        homework.Description,
+		"currentPoints":      homework.CurrentPoints,
+		"maxPoints":          homework.MaxPoints,
+		"type":               homework.Type,
+		"status":             homework.Status,
+		"teacher":            teacher.Name,
+		"student":            student.Name,
+		"isTeacher":          role == Roles.Teacher,
+		"isStudentCanStart":  homework.Status == "new",
+		"isStudentCanFinish": homework.Status == "processing",
+		"isTeacherCanCheck":  homework.Status == "finished",
+		"isChecked":          homework.Status == "checked",
 	})
 }
 
