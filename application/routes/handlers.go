@@ -2,7 +2,6 @@ package routes
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -293,7 +292,7 @@ func (h *profileHandler) Update(c *fiber.Ctx) error {
 		}
 		student.TeacherId = uint(teacherId)
 		repository.Student.Update(student)
-		return c.Redirect("/profile")
+		return c.SendStatus(fiber.StatusOK)
 	}
 	return c.Status(fiber.StatusNotFound).Redirect("/")
 }
@@ -524,7 +523,7 @@ func (h *homeworksHandler) Update(c *fiber.Ctx) error {
 			"error": errSomethingWrong,
 		})
 	}
-	return c.Redirect(fmt.Sprintf("/homeworks/%s", homeworkParam))
+	return c.SendStatus(fiber.StatusOK)
 }
 
 func (h *homeworksHandler) Delete(c *fiber.Ctx) error {

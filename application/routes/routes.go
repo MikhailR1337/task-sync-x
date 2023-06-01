@@ -16,13 +16,13 @@ func PublicRoutes(app *fiber.App) {
 
 func AuthorizedRoutes(app *fiber.App) {
 	app.Get("/profile", ProfileHandler.Get)
-	app.Post("/profile", ProfileHandler.Update)
+	app.Patch("/profile", ProfileHandler.Update)
 	app.Delete("/profile", ProfileHandler.Delete)
 
 	app.Get("/homeworks", HomeworkHandler.GetList)
 	app.Post("/homeworks", HomeworkHandler.Create)
 
 	app.Get("/homeworks/:id", HomeworkHandler.Get)
-	app.Post("/homeworks/:id", HomeworkHandler.Update)
+	app.Patch("/homeworks/:id", HomeworkHandler.Update)
 	app.Delete("/homeworks/:id", HomeworkHandler.Delete)
 }

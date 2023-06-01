@@ -17,13 +17,14 @@ func main() {
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	engine := html.New("template", ".html")
+	engine := html.New("public/template", ".html")
 	app := fiber.New(fiber.Config{
 		Views:        engine,
 		ViewsLayout:  "index",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	})
+	app.Static("/", "./public")
 	server.Init(app)
 
 	port := ":3000"

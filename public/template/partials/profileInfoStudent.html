@@ -15,6 +15,7 @@
         {{- else}}
             {{if .teachers}}
             <form method="POST" action="/profile">
+                <input type="hidden" name="_method" value="PATCH">
                 <label for="teacher">Choose your teacher:</label> 
                 <select name="teacher"> 
                     {{range .teachers}}

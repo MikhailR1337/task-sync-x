@@ -32,11 +32,3 @@ func AddJwtMiddleware(app *fiber.App) {
 		},
 	}))
 }
-
-func Add404Middlware(app *fiber.App) {
-	app.Use(func(c *fiber.Ctx) error {
-		return c.Render("error", fiber.Map{
-			"error": "404 Oops, page not found",
-		})
-	})
-}

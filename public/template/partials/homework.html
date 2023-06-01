@@ -14,6 +14,7 @@
         {{if .isTeacherCanCheck}}
             <div style="display: flex;">
                 <form method="POST" action="/homeworks/{{.id}}" style="display: flex;flex-direction: column;gap: 15px;">
+                    <input type="hidden" name="_method" value="PATCH">
                     <input name="currentPoints" type="text" placeholder="Enter current points" autofocus>
                     <label for="status">Choose the status of homework:</label> 
                     <select name="status"> 
@@ -31,6 +32,7 @@
         {{else}}
         <div style="display: flex;">
             <form method="POST" action="/homeworks/{{.id}}" style="display: flex;flex-direction: column;gap: 15px;">
+                <input type="hidden" name="_method" value="PATCH">
                 <label for="status">Choose the status of homework:</label> 
                 <select name="status">
                     {{if .isStudentCanStart}}
