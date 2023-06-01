@@ -29,4 +29,10 @@
             {{- end}}
         {{- end}}
     </div>
+    <hr>
+    <form method="POST" action="/profile">
+        <input type="hidden" name="_method" value="DELETE">
+        <p>delete the account</p>
+        <button>Delete</button>
+    </form>
 </div>

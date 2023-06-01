@@ -298,7 +298,49 @@ func (h *profileHandler) Update(c *fiber.Ctx) error {
 }
 
 func (h *profileHandler) Delete(c *fiber.Ctx) error {
-	return c.SendString("HELLO")
+	jwtPayload, err := utilities.GetJwtPayload(c)
+	if err != nil {
+		logrus.WithError(err)
+		return c.Redirect("/login")
+	}
+	role := jwtPayload["roles"].(string)
+	if role == Roles.Teacher {
+		teacher, err := repository.Teacher.GetByEmail(jwtPayload["sub"].(string))
+		if err != nil {
+			logrus.WithError(err)
+			return c.Redirect("/login")
+		}
+		err = repository.Teacher.Delete(teacher)
+		if err != nil {
+			logrus.WithError(err)
+			return c.Render("profileTeacher", fiber.Map{
+				"error": errSomethingWrong,
+			})
+		}
+		err = repository.Homework.DeleteByTeacherId(teacher.Id)
+		if err != nil {
+			logrus.WithError(err)
+		}
+	} else {
+		student, err := repository.Student.GetByEmail(jwtPayload["sub"].(string))
+		if err != nil {
+			logrus.WithError(err)
+			return c.Redirect("/login")
+		}
+		err = repository.Student.Delete(student)
+		if err != nil {
+			logrus.WithError(err)
+			return c.Render("profileStudent", fiber.Map{
+				"error": errSomethingWrong,
+			})
+		}
+		err = repository.Homework.DeleteByStudentId(student.Id)
+		if err != nil {
+			logrus.WithError(err)
+		}
+	}
+	c.ClearCookie(initializers.Cfg.JwtCookieKey)
+	return c.SendStatus(fiber.StatusOK)
 }
 
 func (h *homeworksHandler) GetList(c *fiber.Ctx) error {
@@ -430,9 +472,7 @@ func (h *homeworksHandler) Get(c *fiber.Ctx) error {
 	homework, err := repository.Homework.GetById(uint(homeworkId))
 	if err != nil {
 		logrus.WithError(err)
-		return c.Render("homework", fiber.Map{
-			"error": errNotFound,
-		})
+		return c.Redirect("/homeworks")
 	}
 	teacher, err := repository.Teacher.GetById(homework.TeacherId)
 	if err != nil {
@@ -527,5 +567,14 @@ func (h *homeworksHandler) Update(c *fiber.Ctx) error {
 }
 
 func (h *homeworksHandler) Delete(c *fiber.Ctx) error {
-	return c.SendString("HELLO")
+	homeworkParam := c.Params("id")
+	homeworkId, err := strconv.ParseUint(homeworkParam, 10, 32)
+	if err != nil {
+		logrus.WithError(err)
+	}
+	err = repository.Homework.Delete(uint(homeworkId))
+	if err != nil {
+		logrus.WithError(err)
+	}
+	return c.SendStatus(fiber.StatusOK)
 }

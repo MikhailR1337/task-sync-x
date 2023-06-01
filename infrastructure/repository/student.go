@@ -11,6 +11,7 @@ var (
 	errStudentNotFound   = errors.New("student is not found")
 	errStudentNotCreated = errors.New("student is not created")
 	errStudentNotUpdated = errors.New("student is not updated")
+	errStudentNotDeleted = errors.New("student is not deleted")
 )
 
 var Student = &student{&initializers.DB}
@@ -56,6 +57,13 @@ func (h *student) Create(model *models.Student) error {
 func (h *student) Update(model *models.Student) error {
 	if err := h.storage.Save(model).Error; err != nil {
 		return errStudentNotUpdated
+	}
+	return nil
+}
+
+func (h *student) Delete(model *models.Student) error {
+	if err := h.storage.Delete(model).Error; err != nil {
+		return errStudentNotDeleted
 	}
 	return nil
 }

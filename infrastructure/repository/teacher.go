@@ -10,6 +10,7 @@ import (
 var (
 	errTeacherNotFound   = errors.New("teacher is not found")
 	errTeacherNotCreated = errors.New("teacher is not created")
+	errTeacherNotDeleted = errors.New("teacher is not deleted")
 )
 
 var Teacher = &teacher{&initializers.DB}
@@ -48,6 +49,16 @@ func (h *teacher) GetByEmail(email string) (*models.Teacher, error) {
 func (h *teacher) Create(model *models.Teacher) error {
 	if err := h.storage.Create(model).Error; err != nil {
 		return errTeacherNotCreated
+	}
+	return nil
+}
+
+func (h *teacher) Delete(model *models.Teacher) error {
+	if err := h.storage.Delete(model).Error; err != nil {
+		return errTeacherNotDeleted
+	}
+	if err := h.storage.Model(&models.Student{}).Where("teacher_id", model.Id).Update("teacher_id", nil).Error; err != nil {
+		return errTeacherNotDeleted
 	}
 	return nil
 }
