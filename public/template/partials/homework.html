@@ -24,7 +24,7 @@
                 </form>
             </div>
         {{else}}
-            <p>you cannot change status until student is finished</p>
+            <p>you cannot change status until student has finished</p>
         {{- end}}
     {{else}}
         {{if .isTeacherCanCheck}}
@@ -47,9 +47,11 @@
         {{- end}}
     {{- end}}
     {{- end}}
-    <form method="POST" action="/homeworks/{{.id}}">
-        <input type="hidden" name="_method" value="DELETE">
-        <p>delete the homework</p>
-        <button>Delete</button>
-    </form>
+    {{if .isTeacher}}
+        <form method="POST" action="/homeworks/{{.id}}">
+            <input type="hidden" name="_method" value="DELETE">
+            <p>delete the homework</p>
+            <button>Delete</button>
+        </form>
+    {{- end}}
 </div>

@@ -24,8 +24,9 @@ func main() {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	})
-	app.Static("/", "./public")
+
 	server.Init(app)
+	app.Static("/", "./public")
 
 	port := ":3000"
 	logrus.Fatal(app.Listen(port))
