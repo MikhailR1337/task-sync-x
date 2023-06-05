@@ -12,6 +12,7 @@ func PublicRoutes(app *fiber.App) {
 
 	app.Get("/login", LoginHandler.Get)
 	app.Post("/login", LoginHandler.Login)
+	app.Delete("/login", LoginHandler.SignOut)
 }
 
 func AuthorizedRoutes(app *fiber.App) {

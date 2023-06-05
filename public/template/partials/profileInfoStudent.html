@@ -30,6 +30,11 @@
         {{- end}}
     </div>
     <hr>
+    <form method="POST" action="/login">
+        <input type="hidden" name="_method" value="DELETE">
+        <button>Sign out</button>
+    </form>
+    <hr>
     <form method="POST" action="/profile">
         <input type="hidden" name="_method" value="DELETE">
         <p>delete the account</p>

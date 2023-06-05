@@ -194,6 +194,11 @@ func (h *loginHandler) Login(c *fiber.Ctx) error {
 	return c.Redirect("/profile")
 }
 
+func (h *loginHandler) SignOut(c *fiber.Ctx) error {
+	c.ClearCookie(initializers.Cfg.JwtCookieKey)
+	return c.SendStatus(fiber.StatusOK)
+}
+
 func (h *profileHandler) Get(c *fiber.Ctx) error {
 	jwtPayload, err := utilities.GetJwtPayload(c)
 	if err != nil {
