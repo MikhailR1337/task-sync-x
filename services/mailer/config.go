@@ -1,4 +1,4 @@
-package initializers
+package main
 
 import (
 	"encoding/json"
@@ -12,14 +12,10 @@ import (
 )
 
 type Config struct {
-	PgHost         string `env:"PG_HOST"`
-	PgUser         string `env:"PG_USER"`
-	PgPassword     string `env:"PG_PASSWORD"`
-	PgDb           string `env:"PG_DB"`
-	PgPort         string `env:"PG_PORT"`
-	JwtSecretKey   string `env:"JWT_SECRET_KEY"`
-	ContextKeyUser string `env:"CONTEXT_KEY_USER"`
-	JwtCookieKey   string `env:"JWT_COOKIE_KEY"`
+	From         string `env:"FROM"`
+	AuthPassword string `env:"AUTH_PASSWORD"`
+	Host         string `env:"HOST"`
+	Server       string `env:"SERVER"`
 }
 
 var (

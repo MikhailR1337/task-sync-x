@@ -12,3 +12,10 @@ services:
     build: ./services/postgres
     ports:
       - "5432:5432"
+    env_file:
+      - ./services/postgres/.env
+
+  # mailer:
+  #   build: ./services/mailer
+  #   ports:
+  #     - "3001:3001"
