@@ -2,20 +2,23 @@ version: '3'
 
 services:
   app:
-    build: .
+    build: ./app
     ports:
       - "3000:3000"
     depends_on:
       - db
+    restart: always
 
   db:
-    build: ./services/postgres
+    build: ./postgres
     ports:
       - "5432:5432"
     env_file:
-      - ./services/postgres/.env
+      - ./postgres/.env
+    restart: always
 
-  # mailer:
-  #   build: ./services/mailer
-  #   ports:
-  #     - "3001:3001"
+  mailer:
+    build: ./mailer
+    ports:
+      - "3001:3001"
+    restart: always
