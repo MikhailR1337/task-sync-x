@@ -1,12 +1,7 @@
 package routes
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"html/template"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -15,6 +10,7 @@ import (
 	"github.com/MikhailR1337/task-sync-x/app/infrastructure/models"
 	"github.com/MikhailR1337/task-sync-x/app/infrastructure/repository"
 	"github.com/MikhailR1337/task-sync-x/app/initializers"
+	"github.com/MikhailR1337/task-sync-x/app/services/mailer"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/sirupsen/logrus"
@@ -462,33 +458,14 @@ func (h *homeworksHandler) Create(c *fiber.Ctx) error {
 			"error": errSomethingWrong,
 		})
 	}
-	notification := forms.Mailer{}
-	notification.Email = "fanizor1337@gmail.com"
-	notification.Subject = "Homework's status was changed"
-	var body bytes.Buffer
-	t, err := template.ParseFiles("public/template/email/updated.html")
+	student, err := repository.Student.GetById(uint(studentId))
 	if err != nil {
 		logrus.WithError(err)
+		return c.Render("homeworks", fiber.Map{
+			"error": errSomethingWrong,
+		})
 	}
-	fmt.Println(t)
-	t.Execute(&body, struct {
-		Name   string
-		HwName string
-		Status string
-	}{Name: teacher.Name, HwName: newHomework.Name, Status: newHomework.Status})
-	notification.Template = body.String()
-	JsonValue, err := json.Marshal(notification)
-	if err != nil {
-		logrus.WithError(err)
-	}
-	_, err = http.Post(
-		"http://localhost:3001/email",
-		"application/json",
-		bytes.NewBuffer(JsonValue),
-	)
-	if err != nil {
-		logrus.WithError(err)
-	}
+	mailer.NewHomework(student.Email, student.Name, newHomework.Name)
 	return c.Redirect("/homeworks")
 }
 
@@ -565,7 +542,6 @@ func (h *homeworksHandler) Update(c *fiber.Ctx) error {
 			"error": errNotFound,
 		})
 	}
-	notification := &forms.Mailer{}
 	role := jwtPayload["roles"].(string)
 	if role == Roles.Teacher {
 		req := forms.UpdateHomeworkTeacherRequest{}
@@ -584,37 +560,14 @@ func (h *homeworksHandler) Update(c *fiber.Ctx) error {
 		}
 		homework.CurrentPoints = uint8(currentPoints)
 		homework.Status = req.Status
-		teacher, err := repository.Teacher.GetByEmail(jwtPayload["sub"].(string))
+		student, err := repository.Student.GetById(homework.StudentId)
 		if err != nil {
 			logrus.WithError(err)
-			return c.Redirect("/login")
+			return c.Render("homeworks", fiber.Map{
+				"error": errSomethingWrong,
+			})
 		}
-		notification.Email = teacher.Email
-		notification.Subject = "Homework's status was changed"
-		var body bytes.Buffer
-		t, err := template.ParseFiles("../../public/template/email/updated.html")
-		if err != nil {
-			logrus.WithError(err)
-		}
-		t.Execute(&body, struct {
-			Name   string
-			HwName string
-			Status string
-		}{Name: teacher.Name, HwName: homework.Name, Status: homework.Status})
-		notification.Template = body.String()
-		JsonValue, err := json.Marshal(notification)
-		if err != nil {
-			logrus.WithError(err)
-		}
-		resp, err := http.Post(
-			"http://mailer:3001/email",
-			"application/json",
-			bytes.NewBuffer(JsonValue),
-		)
-		if err != nil {
-			logrus.WithError(err)
-		}
-		defer resp.Body.Close()
+		mailer.CheckedHomework(student.Email, student.Name, homework.Name)
 	} else if role == Roles.Student {
 		req := forms.UpdateHomeworkStudentRequest{}
 		if err := c.BodyParser(&req); err != nil {
@@ -624,36 +577,14 @@ func (h *homeworksHandler) Update(c *fiber.Ctx) error {
 			})
 		}
 		homework.Status = req.Status
-		student, err := repository.Student.GetByEmail(jwtPayload["sub"].(string))
+		teacher, err := repository.Teacher.GetById(homework.TeacherId)
 		if err != nil {
 			logrus.WithError(err)
-			return c.Redirect("/login")
+			return c.Render("homeworks", fiber.Map{
+				"error": errSomethingWrong,
+			})
 		}
-		notification.Email = student.Email
-		notification.Subject = "You have got a new homework"
-		var body bytes.Buffer
-		t, err := template.ParseFiles("../../public/template/email/new.html")
-		if err != nil {
-			logrus.WithError(err)
-		}
-		t.Execute(&body, struct {
-			Name   string
-			HwName string
-		}{Name: student.Name, HwName: homework.Name})
-		notification.Template = body.String()
-		JsonValue, err := json.Marshal(notification)
-		if err != nil {
-			logrus.WithError(err)
-		}
-		resp, err := http.Post(
-			"http://mailer:3001/email",
-			"application/json",
-			bytes.NewBuffer(JsonValue),
-		)
-		if err != nil {
-			logrus.WithError(err)
-		}
-		defer resp.Body.Close()
+		mailer.CheckedHomework(teacher.Email, teacher.Name, homework.Name)
 	}
 	err = repository.Homework.Update(homework)
 	if err != nil {
