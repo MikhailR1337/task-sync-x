@@ -19,4 +19,4 @@
 
 # Go workspace file
 .env
-config*.json
+config.json
